@@ -1,0 +1,13 @@
+[package]
+name = "speculam-solver"
+version = "0.1.0"
+edition = "2024"
+description = "A bare-metal, lock-free, parallel constraint solver in Rust designed for low-latency DeFi and MEV optimization."
+readme = "README.md"
+license = "MIT"
+keywords = ["mev", "arbitrage", "solver", "optimization", "constraint"]
+categories = ["algorithms", "mathematics"]
+
+[dependencies]
+rayon = "1.10"
+tokio = { version = "1.38", features = ["full"] }
