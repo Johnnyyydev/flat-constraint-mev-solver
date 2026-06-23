@@ -1,4 +1,4 @@
-use crate::grafo::{SistemaRestricciones, Restriccion};
+use crate::grafo::{Restriccion, SistemaRestricciones};
 
 /// El módulo de Autogénesis toma flujos crudos de datos y reglas lógicas
 /// en formato texto, los parsea de manera autónoma y compila la
@@ -7,7 +7,7 @@ pub struct Autogenesis;
 
 impl Autogenesis {
     /// Compila un texto con variables y reglas estructuradas en el sistema plano.
-    /// 
+    ///
     /// # Sintaxis soportada:
     /// - `fixed(A, 10)` -> Variable rígida/fija A con valor 10.0
     /// - `var(X, 12)` -> Variable maleable X con valor 12.0 y elasticidad 1.0 (defecto)
@@ -22,7 +22,7 @@ impl Autogenesis {
 
         for (num_linea, linea) in datos.lines().enumerate() {
             let linea = linea.trim();
-            
+
             // Ignorar líneas vacías, comentarios y marcas decorativas
             if linea.is_empty() || linea.starts_with('#') || linea.starts_with("//") {
                 continue;
@@ -33,11 +33,18 @@ impl Autogenesis {
                 let interior = &linea[6..linea.len() - 1];
                 let partes: Vec<&str> = interior.split(',').map(|s| s.trim()).collect();
                 if partes.len() != 2 {
-                    return Err(format!("Línea {}: fixed requiere exactamente 2 parámetros", num_linea + 1));
+                    return Err(format!(
+                        "Línea {}: fixed requiere exactamente 2 parámetros",
+                        num_linea + 1
+                    ));
                 }
                 let nombre = partes[0];
                 let valor = partes[1].parse::<f64>().map_err(|e| {
-                    format!("Línea {}: valor inválido para variable rígida: {}", num_linea + 1, e)
+                    format!(
+                        "Línea {}: valor inválido para variable rígida: {}",
+                        num_linea + 1,
+                        e
+                    )
                 })?;
                 sistema.agregar_variable(nombre, valor, 0.0);
             } else if linea.starts_with("elastic(") && linea.ends_with(')') {
@@ -45,26 +52,40 @@ impl Autogenesis {
                 let interior = &linea[8..linea.len() - 1];
                 let partes: Vec<&str> = interior.split(',').map(|s| s.trim()).collect();
                 if partes.len() != 3 {
-                    return Err(format!("Línea {}: elastic requiere exactamente 3 parámetros", num_linea + 1));
+                    return Err(format!(
+                        "Línea {}: elastic requiere exactamente 3 parámetros",
+                        num_linea + 1
+                    ));
                 }
                 let nombre = partes[0];
                 let valor = partes[1].parse::<f64>().map_err(|e| {
-                    format!("Línea {}: valor inválido para variable elástica: {}", num_linea + 1, e)
+                    format!(
+                        "Línea {}: valor inválido para variable elástica: {}",
+                        num_linea + 1,
+                        e
+                    )
                 })?;
-                let elasticidad = partes[2].parse::<f64>().map_err(|e| {
-                    format!("Línea {}: elasticidad inválida: {}", num_linea + 1, e)
-                })?;
+                let elasticidad = partes[2]
+                    .parse::<f64>()
+                    .map_err(|e| format!("Línea {}: elasticidad inválida: {}", num_linea + 1, e))?;
                 sistema.agregar_variable(nombre, valor, elasticidad);
             } else if linea.starts_with("var(") && linea.ends_with(')') {
                 // var(nombre, valor)
                 let interior = &linea[4..linea.len() - 1];
                 let partes: Vec<&str> = interior.split(',').map(|s| s.trim()).collect();
                 if partes.len() != 2 {
-                    return Err(format!("Línea {}: var requiere exactamente 2 parámetros", num_linea + 1));
+                    return Err(format!(
+                        "Línea {}: var requiere exactamente 2 parámetros",
+                        num_linea + 1
+                    ));
                 }
                 let nombre = partes[0];
                 let valor = partes[1].parse::<f64>().map_err(|e| {
-                    format!("Línea {}: valor de variable estándar inválido: {}", num_linea + 1, e)
+                    format!(
+                        "Línea {}: valor de variable estándar inválido: {}",
+                        num_linea + 1,
+                        e
+                    )
                 })?;
                 sistema.agregar_variable(nombre, valor, 1.0);
             } else if linea.starts_with("rango(") && linea.ends_with(')') {
@@ -72,19 +93,30 @@ impl Autogenesis {
                 let interior = &linea[6..linea.len() - 1];
                 let partes: Vec<&str> = interior.split(',').map(|s| s.trim()).collect();
                 if partes.len() != 3 {
-                    return Err(format!("Línea {}: rango requiere exactamente 3 parámetros", num_linea + 1));
+                    return Err(format!(
+                        "Línea {}: rango requiere exactamente 3 parámetros",
+                        num_linea + 1
+                    ));
                 }
                 let var_nombre = partes[0];
                 let min = partes[1].parse::<f64>().map_err(|e| {
-                    format!("Línea {}: valor min de rango inválido: {}", num_linea + 1, e)
+                    format!(
+                        "Línea {}: valor min de rango inválido: {}",
+                        num_linea + 1,
+                        e
+                    )
                 })?;
                 let max = partes[2].parse::<f64>().map_err(|e| {
-                    format!("Línea {}: valor max de rango inválido: {}", num_linea + 1, e)
+                    format!(
+                        "Línea {}: valor max de rango inválido: {}",
+                        num_linea + 1,
+                        e
+                    )
                 })?;
-                
+
                 let var_idx = sistema.obtener_o_crear_variable(var_nombre);
                 contador_restricciones += 1;
-                
+
                 sistema.agregar_restriccion(Restriccion::Rango {
                     nombre: format!("autogen_rango_{}", contador_restricciones),
                     variable: var_idx,
@@ -95,7 +127,10 @@ impl Autogenesis {
                 // Ecuación: Izquierda = Derecha
                 let partes: Vec<&str> = linea.split('=').map(|s| s.trim()).collect();
                 if partes.len() != 2 {
-                    return Err(format!("Línea {}: formato de igualdad inválido (debe contener un solo '=')", num_linea + 1));
+                    return Err(format!(
+                        "Línea {}: formato de igualdad inválido (debe contener un solo '=')",
+                        num_linea + 1
+                    ));
                 }
                 let izquierda = partes[0];
                 let derecha = partes[1];
@@ -106,10 +141,11 @@ impl Autogenesis {
                 if izquierda.contains('+') {
                     // Sumandos separados por '+'
                     let sumandos_strs: Vec<&str> = izquierda.split('+').map(|s| s.trim()).collect();
-                    let sumandos_indices: Vec<usize> = sumandos_strs.iter()
+                    let sumandos_indices: Vec<usize> = sumandos_strs
+                        .iter()
                         .map(|&s| sistema.obtener_o_crear_variable(s))
                         .collect();
-                    
+
                     contador_restricciones += 1;
                     sistema.agregar_restriccion(Restriccion::IgualdadSuma {
                         nombre: format!("autogen_suma_{}", contador_restricciones),
@@ -119,7 +155,8 @@ impl Autogenesis {
                 } else if izquierda.contains('*') {
                     // Factores separados por '*'
                     let factores_strs: Vec<&str> = izquierda.split('*').map(|s| s.trim()).collect();
-                    let factores_indices: Vec<usize> = factores_strs.iter()
+                    let factores_indices: Vec<usize> = factores_strs
+                        .iter()
                         .map(|&s| sistema.obtener_o_crear_variable(s))
                         .collect();
 
@@ -140,7 +177,11 @@ impl Autogenesis {
                     });
                 }
             } else {
-                return Err(format!("Línea {}: instrucción no reconocida o sintaxis inválida: '{}'", num_linea + 1, linea));
+                return Err(format!(
+                    "Línea {}: instrucción no reconocida o sintaxis inválida: '{}'",
+                    num_linea + 1,
+                    linea
+                ));
             }
         }
 

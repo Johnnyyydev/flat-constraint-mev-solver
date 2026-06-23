@@ -1,5 +1,5 @@
+use speculam_solver::{MotorSpeculam, Restriccion, SistemaRestricciones};
 use std::time::Instant;
-use speculam_solver::{SistemaRestricciones, Restriccion, MotorSpeculam};
 
 fn main() {
     let cyan = "\x1b[36;1m";
@@ -7,9 +7,18 @@ fn main() {
     let yellow = "\x1b[33;1m";
     let reset = "\x1b[0m";
 
-    println!("{}=========================================================={}", cyan, reset);
-    println!("{}    S.P.E.C.U.L.A.M. v5 - OPTIMIZADOR MEV DE ARBITRAJE     {}", cyan, reset);
-    println!("{}=========================================================={}", cyan, reset);
+    println!(
+        "{}=========================================================={}",
+        cyan, reset
+    );
+    println!(
+        "{}    S.P.E.C.U.L.A.M. v5 - OPTIMIZADOR MEV DE ARBITRAJE     {}",
+        cyan, reset
+    );
+    println!(
+        "{}=========================================================={}",
+        cyan, reset
+    );
     println!("  Calculando el tamaño de swap óptimo en microsegundos...\n");
 
     // =========================================================================
@@ -112,7 +121,7 @@ fn main() {
         sumandos: vec![delta_y, objetivo_ganancia],
         resultado: delta_y_mas_objetivo,
     });
-    
+
     // Fuerza atractora de ganancia
     sistema.agregar_restriccion(Restriccion::IgualdadDirecta {
         nombre: "atraccion_ganancia".to_string(),
@@ -124,7 +133,10 @@ fn main() {
     sistema.precalcular_adyacencias();
 
     // 5. Ejecutar la optimización elástica
-    println!("{}---> Buscando tamaño óptimo de swap con S.P.E.C.U.L.A.M. v5...{}", yellow, reset);
+    println!(
+        "{}---> Buscando tamaño óptimo de swap con S.P.E.C.U.L.A.M. v5...{}",
+        yellow, reset
+    );
     let t_solve_inicio = Instant::now();
     let motor = MotorSpeculam::new();
     let solucion = motor.evaluar(&sistema);
@@ -135,7 +147,11 @@ fn main() {
 
     // 6. Analizar la solución matemática óptima encontrada
     match solucion {
-        speculam_solver::SolucionEspejo::Pista { valores_ajustados, explicacion, .. } => {
+        speculam_solver::SolucionEspejo::Pista {
+            valores_ajustados,
+            explicacion,
+            ..
+        } => {
             let dx = valores_ajustados.get("DeltaX").unwrap();
             let dy = valores_ajustados.get("DeltaY").unwrap();
             let dy_out = valores_ajustados.get("DeltaY_Out").unwrap();
@@ -145,20 +161,30 @@ fn main() {
 
             println!("  [ÓPTIMO DE TRADE ENCONTRADO]");
             println!("  - Inyectar en Orca (USDC): {:.2} USDC", dy);
-            println!("  - Retirar de Orca (SOL): {:.4} SOL (Precio efectivo: {:.2} USDC/SOL)", dx, dy / dx);
+            println!(
+                "  - Retirar de Orca (SOL): {:.4} SOL (Precio efectivo: {:.2} USDC/SOL)",
+                dx,
+                dy / dx
+            );
             println!("  - Retirar de Raydium (USDC): {:.2} USDC", dy_out);
-            println!("  - Ganancia neta estimada: {}${:.2} USDC{}", green, ganancia, reset);
+            println!(
+                "  - Ganancia neta estimada: {}${:.2} USDC{}",
+                green, ganancia, reset
+            );
             println!("  - SOL intermedio movido: {:.4} SOL", dx);
-        },
+        }
         speculam_solver::SolucionEspejo::Directa { valores } => {
             println!("Solución directa sin tensión.");
             println!("Valores: {:?}", valores);
-        },
+        }
         speculam_solver::SolucionEspejo::ComplejidadAlta { estres, mensaje } => {
             println!("Error al optimizar: {}", mensaje);
             println!("Estrés: {}", estres.energia_total);
         }
     }
 
-    println!("\n{}=========================================================={}", cyan, reset);
+    println!(
+        "\n{}=========================================================={}",
+        cyan, reset
+    );
 }

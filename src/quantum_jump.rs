@@ -1,14 +1,17 @@
-use std::collections::HashMap;
-use crate::grafo::SistemaRestricciones;
 use crate::estres::CampoEstres;
+use crate::grafo::SistemaRestricciones;
+use std::collections::HashMap;
 
 /// Estructura encargada de realizar la optimización híbrida continuo-discreta
 /// y colapsar variables a coordenadas enteras mediante recocido topológico.
 pub struct QuantumJumper {
+    /// Tasa de aprendizaje/paso de optimización para el descenso de gradiente.
     pub learning_rate: f64,
+    /// Número máximo de iteraciones permitidas por ciclo de recocido.
     pub max_pasos: usize,
+    /// Tolerancia de energía residual aceptada para considerar una solución discreta exitosa.
     pub tolerancia: f64,
-    /// Fuerza máxima del potencial periódico de cristalización
+    /// Fuerza máxima del potencial periódico de cristalización (K_int).
     pub fuerza_cristalizacion: f64,
 }
 
@@ -24,19 +27,24 @@ impl Default for QuantumJumper {
 }
 
 impl QuantumJumper {
+    /// Crea una nueva instancia de `QuantumJumper` con la configuración por defecto.
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Intenta encontrar una combinación de valores enteros para las variables discretas dadas
     /// que minimice o anule por completo la tensión del sistema.
+    ///
+    /// Este método utiliza una técnica inspirada en la física cuántica, inyectando un potencial
+    /// periódico sinusoidal que obliga a las variables especificadas a cristalizar en valores enteros
+    /// a medida que avanza el descenso de gradiente térmico.
     pub fn saltar_espacio_discreto(
         &self,
         sistema: &SistemaRestricciones,
         var_discretas: &[usize],
     ) -> Option<HashMap<String, f64>> {
         let mut sistema_trabajo = sistema.clone();
-        
+
         // Generador congruencial lineal (LCG) ultra simple y rápido para evitar dependencias de crates de azar
         let mut lcg_seed = 987654321u32;
         let mut next_random = || {
@@ -71,7 +79,8 @@ impl QuantumJumper {
                 // dE_int/dx = K * pi * sin(2 * pi * x)
                 for &idx in var_discretas {
                     let val = sistema_trabajo.valores[idx];
-                    let grad_int = k_int * std::f64::consts::PI * (2.0 * std::f64::consts::PI * val).sin();
+                    let grad_int =
+                        k_int * std::f64::consts::PI * (2.0 * std::f64::consts::PI * val).sin();
                     estres_actual.gradiente[idx] += grad_int;
                 }
 
@@ -93,7 +102,8 @@ impl QuantumJumper {
                 for idx in 0..len {
                     if !sistema_trabajo.es_fija(idx) {
                         let grad_val = estres_actual.gradiente[idx] * factor_clipping;
-                        let delta = -self.learning_rate * sistema_trabajo.elasticidades[idx] * grad_val;
+                        let delta =
+                            -self.learning_rate * sistema_trabajo.elasticidades[idx] * grad_val;
                         sistema_trabajo.valores[idx] += delta;
                     }
                 }
@@ -124,12 +134,12 @@ impl QuantumJumper {
 
         // Si no encontramos un colapso perfecto (energía < tolerancia), retornamos el mejor
         // que hayamos obtenido en el proceso, siempre que la energía no sea astronómica.
-        if mejor_energia_discreta < 1.0 {
-            if let Some(valores_finales) = mejor_configuracion_discreta {
-                let mut sistema_final = sistema_trabajo.clone();
-                sistema_final.valores = valores_finales;
-                return Some(sistema_final.mapear_valores());
-            }
+        if let Some(valores_finales) =
+            mejor_configuracion_discreta.filter(|_| mejor_energia_discreta < 1.0)
+        {
+            let mut sistema_final = sistema_trabajo.clone();
+            sistema_final.valores = valores_finales;
+            return Some(sistema_final.mapear_valores());
         }
 
         None

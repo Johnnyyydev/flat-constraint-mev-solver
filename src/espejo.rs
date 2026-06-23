@@ -1,38 +1,48 @@
-use std::collections::HashMap;
-use crate::grafo::{SistemaRestricciones, Restriccion};
 use crate::estres::CampoEstres;
+use crate::grafo::{Restriccion, SistemaRestricciones};
+use std::collections::HashMap;
 
-/// Los estados de la solución devuelta por el Espejo Lógico de S.P.E.C.U.L.A.M. v2.
+/// Los estados de la solución devuelta por el resolvedor elástico de S.P.E.C.U.L.A.M.
 #[derive(Debug, Clone)]
 pub enum SolucionEspejo {
     /// El sistema es completamente coherente y no tiene tensión inicial significativa.
     Directa {
+        /// Mapa de nombres de variables a sus valores finales.
         valores: HashMap<String, f64>,
     },
     /// El sistema contenía contradicciones o tensiones. Se proponen ajustes elásticos
     /// en las variables o colapsos de fase en las restricciones rígidas para equilibrarlo.
     Pista {
+        /// Mapa de nombres de variables a sus valores de entrada originales.
         valores_originales: HashMap<String, f64>,
+        /// Mapa de nombres de variables a sus nuevos valores equilibrados.
         valores_ajustados: HashMap<String, f64>,
+        /// Mapa con las desviaciones aplicadas a las variables maleables.
         desviaciones: HashMap<String, f64>,
+        /// Mapa de restricciones rígidas con su tensión residual calculada.
         tensiones_residuales: HashMap<String, f64>,
+        /// Explicación heurística y legible de la solución o de las inconsistencias.
         explicacion: String,
     },
     /// La complejidad o las contradicciones son tan altas que no se pudo encontrar un mínimo
     /// local estable dentro del límite de pasos.
     ComplejidadAlta {
+        /// Campo de estrés final del resolvedor.
         estres: CampoEstres,
+        /// Mensaje descriptivo con el motivo de la complejidad/fallo.
         mensaje: String,
     },
 }
 
+/// Motor de optimización elástica que disipa el estrés local mediante descenso de gradiente.
 pub struct MotorSpeculam {
+    /// Tasa de aprendizaje/paso de optimización para el descenso de gradiente.
     pub learning_rate: f64,
+    /// Número máximo de iteraciones permitidas para el resolvedor.
     pub max_pasos: usize,
+    /// Tolerancia de energía residual por debajo de la cual el sistema se considera resuelto.
     pub tolerancia: f64,
-    /// Presupuesto estricto de tiempo en microsegundos.
-    /// Si la optimización tarda más de este límite, se detiene inmediatamente y devuelve
-    /// la mejor solución encontrada hasta el momento.
+    /// Presupuesto estricto de tiempo de ejecución en microsegundos (opcional).
     pub max_duracion_microsegundos: Option<u64>,
 }
 
@@ -48,6 +58,7 @@ impl Default for MotorSpeculam {
 }
 
 impl MotorSpeculam {
+    /// Crea una nueva instancia de `MotorSpeculam` con los parámetros por defecto.
     pub fn new() -> Self {
         Self::default()
     }
@@ -72,10 +83,11 @@ impl MotorSpeculam {
         // Bucle de optimización ultra rápido por indexación directa de memoria
         for _ in 0..self.max_pasos {
             // Control de tiempo en tiempo real (microsegundos)
-            if let Some(limite) = self.max_duracion_microsegundos {
-                if t_inicio.elapsed().as_micros() as u64 >= limite {
-                    break;
-                }
+            if self
+                .max_duracion_microsegundos
+                .is_some_and(|limite| t_inicio.elapsed().as_micros() as u64 >= limite)
+            {
+                break;
             }
 
             let estres_actual = CampoEstres::calcular(&sistema_trabajo);
@@ -121,7 +133,8 @@ impl MotorSpeculam {
                     } else {
                         grad_val
                     };
-                    let delta = -self.learning_rate * sistema_trabajo.elasticidades[idx] * clipped_g;
+                    let delta =
+                        -self.learning_rate * sistema_trabajo.elasticidades[idx] * clipped_g;
                     sistema_trabajo.valores[idx] += delta;
                 }
             }
@@ -172,19 +185,33 @@ impl MotorSpeculam {
         }
 
         if !tensiones_residuales.is_empty() {
-            explicacion.push_str("• Pistas estructurales detectadas para resolver contradicciones rígidas:\n");
+            explicacion.push_str(
+                "• Pistas estructurales detectadas para resolver contradicciones rígidas:\n",
+            );
             for (restriccion_nombre, tension) in &tensiones_residuales {
-                if let Some(rest) = sistema.restricciones.iter().find(|r| r.nombre() == restriccion_nombre) {
+                if let Some(rest) = sistema
+                    .restricciones
+                    .iter()
+                    .find(|r| r.nombre() == restriccion_nombre)
+                {
                     match rest {
-                        Restriccion::IgualdadSuma { sumandos, resultado, .. } => {
-                            let nombres_sumandos: Vec<String> = sumandos.iter()
+                        Restriccion::IgualdadSuma {
+                            sumandos,
+                            resultado,
+                            ..
+                        } => {
+                            let nombres_sumandos: Vec<String> = sumandos
+                                .iter()
                                 .map(|&idx| sistema.nombres[idx].clone())
                                 .collect();
                             let nombre_res = &sistema.nombres[*resultado];
-                            
-                            let suma_real: f64 = sumandos.iter().map(|&idx| sistema_trabajo.valores[idx]).sum();
+
+                            let suma_real: f64 = sumandos
+                                .iter()
+                                .map(|&idx| sistema_trabajo.valores[idx])
+                                .sum();
                             let res_esperado = sistema_trabajo.valores[*resultado];
-                            
+
                             explicacion.push_str(&format!(
                                 "  - Relación '{}': ({} = {}) falló. La suma real es {}, pero se esperaba {}.\n",
                                 restriccion_nombre, nombres_sumandos.join(" + "), nombre_res, suma_real, res_esperado
@@ -195,18 +222,30 @@ impl MotorSpeculam {
                             ));
                             explicacion.push_str(&format!(
                                 "    >>> RUTA OCULTA: ({}) {:+.4} = {}\n",
-                                sumandos.iter().map(|&idx| format!("{}", sistema_trabajo.valores[idx])).collect::<Vec<_>>().join(" + "),
+                                sumandos
+                                    .iter()
+                                    .map(|&idx| format!("{}", sistema_trabajo.valores[idx]))
+                                    .collect::<Vec<_>>()
+                                    .join(" + "),
                                 -tension,
                                 res_esperado
                             ));
-                        },
-                        Restriccion::IgualdadProducto { factores, resultado, .. } => {
-                            let nombres_factores: Vec<String> = factores.iter()
+                        }
+                        Restriccion::IgualdadProducto {
+                            factores,
+                            resultado,
+                            ..
+                        } => {
+                            let nombres_factores: Vec<String> = factores
+                                .iter()
                                 .map(|&idx| sistema.nombres[idx].clone())
                                 .collect();
                             let nombre_res = &sistema.nombres[*resultado];
 
-                            let prod_real: f64 = factores.iter().map(|&idx| sistema_trabajo.valores[idx]).product();
+                            let prod_real: f64 = factores
+                                .iter()
+                                .map(|&idx| sistema_trabajo.valores[idx])
+                                .product();
                             let res_esperado = sistema_trabajo.valores[*resultado];
 
                             explicacion.push_str(&format!(
@@ -217,8 +256,10 @@ impl MotorSpeculam {
                                 "    >>> COLAPSO DE FASE: Para equilibrar la ecuación, se requiere un ajuste de [{:+.4}] en el producto.\n",
                                 -tension
                             ));
-                        },
-                        Restriccion::Rango { variable, min, max, .. } => {
+                        }
+                        Restriccion::Rango {
+                            variable, min, max, ..
+                        } => {
                             let nombre_var = &sistema.nombres[*variable];
                             let val = sistema_trabajo.valores[*variable];
                             explicacion.push_str(&format!(
@@ -229,7 +270,7 @@ impl MotorSpeculam {
                                 "    >>> COLAPSO DE FASE: Mover '{}' por [{:+.4}] para entrar en el rango permitido.\n",
                                 nombre_var, -tension
                             ));
-                        },
+                        }
                         Restriccion::IgualdadDirecta { var_a, var_b, .. } => {
                             let nombre_a = &sistema.nombres[*var_a];
                             let nombre_b = &sistema.nombres[*var_b];
@@ -256,7 +297,9 @@ impl MotorSpeculam {
         if divergiendo {
             SolucionEspejo::ComplejidadAlta {
                 estres: estres_final,
-                mensaje: "El campo de estrés divergió. Reducción inestable o desbordamiento numérico.".to_string(),
+                mensaje:
+                    "El campo de estrés divergió. Reducción inestable o desbordamiento numérico."
+                        .to_string(),
             }
         } else {
             SolucionEspejo::Pista {

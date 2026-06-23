@@ -1,5 +1,5 @@
+use speculam_solver::{Autogenesis, CampoEstres, MotorSpeculam};
 use std::time::Instant;
-use speculam_solver::{Autogenesis, MotorSpeculam, CampoEstres};
 
 fn main() {
     let cyan = "\x1b[36;1m";
@@ -7,9 +7,18 @@ fn main() {
     let yellow = "\x1b[33;1m";
     let reset = "\x1b[0m";
 
-    println!("{}=========================================================={}", cyan, reset);
-    println!("{}       S.P.E.C.U.L.A.M. BENCHMARK INDUSTRIAL (Paso 1)      {}", cyan, reset);
-    println!("{}=========================================================={}", cyan, reset);
+    println!(
+        "{}=========================================================={}",
+        cyan, reset
+    );
+    println!(
+        "{}       S.P.E.C.U.L.A.M. BENCHMARK INDUSTRIAL (Paso 1)      {}",
+        cyan, reset
+    );
+    println!(
+        "{}=========================================================={}",
+        cyan, reset
+    );
     println!("  Generando red sintética masiva de variables y restricciones...\n");
 
     let num_variables = 10000;
@@ -51,11 +60,18 @@ fn main() {
     }
 
     let t_gen_elapsed = t_gen_inicio.elapsed();
-    println!("• Generación de datos sintéticos: {} variable(s) y {} ecuación(es) en texto plano.", num_variables, num_bloques * 3);
+    println!(
+        "• Generación de datos sintéticos: {} variable(s) y {} ecuación(es) en texto plano.",
+        num_variables,
+        num_bloques * 3
+    );
     println!("  Tiempo: {:.2?}\n", t_gen_elapsed);
 
     // 2. Compilar con Autogénesis
-    println!("{}---> Iniciando Compilación por Autogénesis...{}", yellow, reset);
+    println!(
+        "{}---> Iniciando Compilación por Autogénesis...{}",
+        yellow, reset
+    );
     let t_comp_inicio = Instant::now();
     let sistema = match Autogenesis::compilar_flujo_crudo(&raw_data) {
         Ok(s) => s,
@@ -66,27 +82,46 @@ fn main() {
     };
     let t_comp_elapsed = t_comp_inicio.elapsed();
     println!("{}>>> COMPILACIÓN COMPLETADA <<<{}", green, reset);
-    println!("  Variables cargadas en memoria plana: {}", sistema.valores.len());
-    println!("  Restricciones compiladas: {}", sistema.restricciones.len());
+    println!(
+        "  Variables cargadas en memoria plana: {}",
+        sistema.valores.len()
+    );
+    println!(
+        "  Restricciones compiladas: {}",
+        sistema.restricciones.len()
+    );
     println!("  Tiempo de compilación: {:.2?}\n", t_comp_elapsed);
 
     // Calcular estrés inicial
     let estres_inicial = CampoEstres::calcular(&sistema);
-    println!("• Energía elástica inicial del sistema: {:.4}", estres_inicial.energia_total);
+    println!(
+        "• Energía elástica inicial del sistema: {:.4}",
+        estres_inicial.energia_total
+    );
 
     // 3. Resolver con el motor Speculam v3 optimizado para memoria plana
-    println!("\n{}---> Ejecutando resolvedor matricial plano (Speculam Solver)...{}", yellow, reset);
+    println!(
+        "\n{}---> Ejecutando resolvedor matricial plano (Speculam Solver)...{}",
+        yellow, reset
+    );
     let motor = MotorSpeculam::new();
     let t_solve_inicio = Instant::now();
     let solucion = motor.evaluar(&sistema);
     let t_solve_elapsed = t_solve_inicio.elapsed();
 
     println!("{}>>> RESOLUCIÓN COMPLETADA <<<{}", green, reset);
-    println!("  Tiempo de ejecución del resolvedor: {:.2?}", t_solve_elapsed);
+    println!(
+        "  Tiempo de ejecución del resolvedor: {:.2?}",
+        t_solve_elapsed
+    );
 
     // Evaluar energía residual
     match solucion {
-        speculam_solver::SolucionEspejo::Pista { tensiones_residuales, valores_ajustados, .. } => {
+        speculam_solver::SolucionEspejo::Pista {
+            tensiones_residuales,
+            valores_ajustados,
+            ..
+        } => {
             let mut verificador = sistema.clone();
             for (var, val) in valores_ajustados {
                 if let Some(&idx) = verificador.variable_indices.get(&var) {
@@ -94,15 +129,22 @@ fn main() {
                 }
             }
             let estres_final = CampoEstres::calcular(&verificador);
-            println!("• Energía elástica final: {:.6}", estres_final.energia_total);
-            println!("  Tensiones de ecuaciones activas (no resueltas por rigidez): {}", tensiones_residuales.len());
-            println!("  Reducción de estrés: {:.2}%", 
+            println!(
+                "• Energía elástica final: {:.6}",
+                estres_final.energia_total
+            );
+            println!(
+                "  Tensiones de ecuaciones activas (no resueltas por rigidez): {}",
+                tensiones_residuales.len()
+            );
+            println!(
+                "  Reducción de estrés: {:.2}%",
                 (1.0 - estres_final.energia_total / estres_inicial.energia_total) * 100.0
             );
-        },
+        }
         speculam_solver::SolucionEspejo::Directa { .. } => {
             println!("• Energía elástica final: 0.000000 (Solución directa perfecta).");
-        },
+        }
         speculam_solver::SolucionEspejo::ComplejidadAlta { estres, mensaje } => {
             println!("• Estado de salida: Complejidad Fuera de Límites");
             println!("  Mensaje: {}", mensaje);
@@ -110,5 +152,8 @@ fn main() {
         }
     }
 
-    println!("\n{}=========================================================={}", cyan, reset);
+    println!(
+        "\n{}=========================================================={}",
+        cyan, reset
+    );
 }

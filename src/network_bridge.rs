@@ -1,8 +1,9 @@
-use std::time::{Instant, Duration};
-use tokio::sync::mpsc;
-use crate::grafo::SistemaRestricciones;
 use crate::espejo::{MotorSpeculam, SolucionEspejo};
+use crate::grafo::SistemaRestricciones;
+use std::time::{Duration, Instant};
+use tokio::sync::mpsc;
 
+/// Puente de red asíncrono que conecta el resolvedor elástico con flujos continuos de telemetría y red.
 pub struct NetworkBridge;
 
 impl NetworkBridge {
@@ -12,7 +13,7 @@ impl NetworkBridge {
         let (tx, rx) = mpsc::channel(100);
 
         tokio::spawn(async move {
-            let eventos = vec![
+            let eventos = [
                 ("Nodo_Origen".to_string(), 8.0),
                 ("Fuga_Red".to_string(), 2.0),
                 ("Nodo_Origen".to_string(), 4.0),
@@ -24,7 +25,7 @@ impl NetworkBridge {
             let mut idx = 0;
             loop {
                 tokio::time::sleep(Duration::from_millis(intervalo_ms)).await;
-                
+
                 let (var_name, val) = &eventos[idx % eventos.len()];
                 if tx.send((var_name.clone(), *val)).await.is_err() {
                     break; // El receptor se cerró, finalizamos la simulación
@@ -49,18 +50,27 @@ impl NetworkBridge {
         let yellow = "\x1b[33m";
         let reset = "\x1b[0m";
 
-        println!("  [BRIDGE] Escuchando telemetría asíncrona... listo para disipar estrés en vivo.\n");
+        println!(
+            "  [BRIDGE] Escuchando telemetría asíncrona... listo para disipar estrés en vivo.\n"
+        );
 
         while let Some((nombre_var, nuevo_valor)) = rx.recv().await {
-            println!("{}----------------------------------------------------------{}", cyan, reset);
-            println!("  [TELEMETRÍA EN VIVO] Ingesta de red: {}{} = {:.2}{}", yellow, nombre_var, nuevo_valor, reset);
+            println!(
+                "{}----------------------------------------------------------{}",
+                cyan, reset
+            );
+            println!(
+                "  [TELEMETRÍA EN VIVO] Ingesta de red: {}{} = {:.2}{}",
+                yellow, nombre_var, nuevo_valor, reset
+            );
 
             // 1. Buscar la variable en caliente por O(1) e inyectar el nuevo valor en la memoria plana
             if let Some(&var_idx) = sistema.variable_indices.get(&nombre_var) {
                 let valor_anterior = sistema.valores[var_idx];
                 sistema.valores[var_idx] = nuevo_valor;
 
-                println!("  [MEMORIA PLANA] Variable '{}' actualizada en caliente: {:.2} -> {:.2}", 
+                println!(
+                    "  [MEMORIA PLANA] Variable '{}' actualizada en caliente: {:.2} -> {:.2}",
                     nombre_var, valor_anterior, nuevo_valor
                 );
 
@@ -69,37 +79,55 @@ impl NetworkBridge {
                 let solucion = motor.evaluar(&sistema);
                 let t_solve_elapsed = t_solve_inicio.elapsed();
 
-                println!("  [SPECULAM SOLVER] Re-equilibrio completado en: {}{:.2?}{}", green, t_solve_elapsed, reset);
+                println!(
+                    "  [SPECULAM SOLVER] Re-equilibrio completado en: {}{:.2?}{}",
+                    green, t_solve_elapsed, reset
+                );
 
                 // 3. Mostrar la disipación del estrés y valores resultantes
                 match solucion {
-                    SolucionEspejo::Pista { valores_ajustados, desviaciones, .. } => {
+                    SolucionEspejo::Pista {
+                        valores_ajustados,
+                        desviaciones,
+                        ..
+                    } => {
                         if !desviaciones.is_empty() {
                             println!("  [DEFORMACIONES]");
                             for (var, delta) in &desviaciones {
-                                println!("    - '{}' se ajustó por [{:+.4}] -> valor final: {:.4}", 
-                                    var, delta, valores_ajustados.get(var).unwrap()
+                                println!(
+                                    "    - '{}' se ajustó por [{:+.4}] -> valor final: {:.4}",
+                                    var,
+                                    delta,
+                                    valores_ajustados.get(var).unwrap()
                                 );
                             }
                         } else {
-                            println!("  [ESTADO] El cambio fue absorbido completamente por el sistema sin deformación residual.");
+                            println!(
+                                "  [ESTADO] El cambio fue absorbido completamente por el sistema sin deformación residual."
+                            );
                         }
-                    },
+                    }
                     SolucionEspejo::Directa { valores } => {
                         println!("  [ESTADO] Equilibrio perfecto directo. Valores:");
                         for (var, val) in &valores {
                             println!("    - '{}' = {:.4}", var, val);
                         }
-                    },
+                    }
                     SolucionEspejo::ComplejidadAlta { estres, mensaje } => {
                         println!("  [ADVERTENCIA] Caos detectado: {}", mensaje);
                         println!("    Tensión final del sistema: {:.4}", estres.energia_total);
                     }
                 }
             } else {
-                println!("  [ADVERTENCIA] Telemetría omitida: '{}' no pertenece al grafo lógico actual.", nombre_var);
+                println!(
+                    "  [ADVERTENCIA] Telemetría omitida: '{}' no pertenece al grafo lógico actual.",
+                    nombre_var
+                );
             }
-            println!("{}----------------------------------------------------------{}", cyan, reset);
+            println!(
+                "{}----------------------------------------------------------{}",
+                cyan, reset
+            );
         }
     }
 }

@@ -1,5 +1,5 @@
+use crate::grafo::{Restriccion, SistemaRestricciones};
 use rayon::prelude::*;
-use crate::grafo::{SistemaRestricciones, Restriccion};
 
 /// Contiene el estado del campo de estrés en un instante dado usando arrays contiguos sin alocación.
 #[derive(Debug, Clone)]
@@ -16,43 +16,55 @@ pub struct CampoEstres {
 
 impl CampoEstres {
     /// Calcula el campo de estrés actual del sistema de restricciones plano libre de alocaciones.
+    ///
+    /// Este método evalúa la energía total, las desviaciones/tensiones locales de cada restricción
+    /// y el gradiente de energía local en paralelo usando Rayon.
     pub fn calcular(sistema: &SistemaRestricciones) -> Self {
         // Pasada 1: Calcular la tensión de cada restricción en paralelo con Rayon (sin alocar Strings)
-        let tensiones: Vec<f64> = sistema.restricciones
+        let tensiones: Vec<f64> = sistema
+            .restricciones
             .par_iter()
-            .map(|restriccion| {
-                match restriccion {
-                    Restriccion::IgualdadSuma { sumandos, resultado, .. } => {
-                        let mut suma = 0.0;
-                        for &idx in sumandos {
-                            suma += sistema.valores[idx];
-                        }
-                        let res = sistema.valores[*resultado];
-                        suma - res
-                    },
-                    Restriccion::IgualdadProducto { factores, resultado, .. } => {
-                        let mut prod = 1.0;
-                        for &idx in factores {
-                            prod *= sistema.valores[idx];
-                        }
-                        let res = sistema.valores[*resultado];
-                        prod - res
-                    },
-                    Restriccion::Rango { variable, min, max, .. } => {
-                        let val = sistema.valores[*variable];
-                        if val < *min {
-                            val - *min
-                        } else if val > *max {
-                            val - *max
-                        } else {
-                            0.0
-                        }
-                    },
-                    Restriccion::IgualdadDirecta { var_a, var_b, .. } => {
-                        let val_a = sistema.valores[*var_a];
-                        let val_b = sistema.valores[*var_b];
-                        val_a - val_b
+            .map(|restriccion| match restriccion {
+                Restriccion::IgualdadSuma {
+                    sumandos,
+                    resultado,
+                    ..
+                } => {
+                    let mut suma = 0.0;
+                    for &idx in sumandos {
+                        suma += sistema.valores[idx];
                     }
+                    let res = sistema.valores[*resultado];
+                    suma - res
+                }
+                Restriccion::IgualdadProducto {
+                    factores,
+                    resultado,
+                    ..
+                } => {
+                    let mut prod = 1.0;
+                    for &idx in factores {
+                        prod *= sistema.valores[idx];
+                    }
+                    let res = sistema.valores[*resultado];
+                    prod - res
+                }
+                Restriccion::Rango {
+                    variable, min, max, ..
+                } => {
+                    let val = sistema.valores[*variable];
+                    if val < *min {
+                        val - *min
+                    } else if val > *max {
+                        val - *max
+                    } else {
+                        0.0
+                    }
+                }
+                Restriccion::IgualdadDirecta { var_a, var_b, .. } => {
+                    let val_a = sistema.valores[*var_a];
+                    let val_b = sistema.valores[*var_b];
+                    val_a - val_b
                 }
             })
             .collect();

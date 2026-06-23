@@ -1,4 +1,6 @@
-use speculam_solver::{SistemaRestricciones, Restriccion, MotorSpeculam, SolucionEspejo, Autogenesis, QuantumJumper};
+use speculam_solver::{
+    Autogenesis, MotorSpeculam, QuantumJumper, Restriccion, SistemaRestricciones, SolucionEspejo,
+};
 
 #[test]
 fn test_sistema_coherente_directo() {
@@ -37,7 +39,11 @@ fn test_contradiccion_rigida_genera_pista() {
     sistema.precalcular_adyacencias();
     let solucion = motor.evaluar(&sistema);
 
-    if let SolucionEspejo::Pista { tensiones_residuales, .. } = solucion {
+    if let SolucionEspejo::Pista {
+        tensiones_residuales,
+        ..
+    } = solucion
+    {
         let tension = tensiones_residuales.get("suma_invalida").unwrap();
         assert!((tension - (-1.0)).abs() < 1e-5);
     } else {
@@ -62,10 +68,15 @@ fn test_relajacion_elastica() {
     sistema.precalcular_adyacencias();
     let solucion = motor.evaluar(&sistema);
 
-    if let SolucionEspejo::Pista { valores_ajustados, desviaciones, .. } = solucion {
+    if let SolucionEspejo::Pista {
+        valores_ajustados,
+        desviaciones,
+        ..
+    } = solucion
+    {
         let x_final = valores_ajustados.get("X").unwrap();
         assert!((x_final - 11.0).abs() < 1e-4);
-        
+
         let x_desviacion = desviaciones.get("X").unwrap();
         assert!((x_desviacion - (-1.0)).abs() < 1e-4);
     } else {
@@ -86,7 +97,10 @@ fn test_autogenesis_y_resolucion() {
     let motor = MotorSpeculam::new();
     let solucion = motor.evaluar(&sistema);
 
-    if let SolucionEspejo::Pista { valores_ajustados, .. } = solucion {
+    if let SolucionEspejo::Pista {
+        valores_ajustados, ..
+    } = solucion
+    {
         let x_final = valores_ajustados.get("X").unwrap();
         // X debe aproximarse a 5 * 3 = 15
         assert!((x_final - 15.0).abs() < 1e-4);
@@ -202,15 +216,24 @@ fn test_arbitraje_mev_orca_raydium() {
     let motor = MotorSpeculam::new();
     let solucion = motor.evaluar(&sistema);
 
-    if let SolucionEspejo::Pista { valores_ajustados, .. } = solucion {
+    if let SolucionEspejo::Pista {
+        valores_ajustados, ..
+    } = solucion
+    {
         let dy = valores_ajustados.get("DeltaY").unwrap();
         let dy_out = valores_ajustados.get("DeltaY_Out").unwrap();
         let ganancia = dy_out - dy;
 
         // Comprobar que el arbitraje da ganancia positiva
-        assert!(ganancia > 50.0, "La ganancia optimizada debería ser sustancial (> 50 USDC)");
-        assert!(ganancia < 5000.0, "La ganancia debe estar acotada por el deslizamiento");
-        
+        assert!(
+            ganancia > 50.0,
+            "La ganancia optimizada debería ser sustancial (> 50 USDC)"
+        );
+        assert!(
+            ganancia < 5000.0,
+            "La ganancia debe estar acotada por el deslizamiento"
+        );
+
         // Comprobar que el tamaño del swap óptimo convergió cerca de 950.0 USDC
         assert!((dy - 950.92).abs() < 50.0);
     } else {
@@ -246,7 +269,7 @@ fn test_arbitraje_triangular_multi_hop() {
     // Post-reserves
     let x1_post = sistema.agregar_variable("X1_Post", 994.0, 1.0);
     let y1_post = sistema.agregar_variable("Y1_Post", 151000.0, 1.0);
-    
+
     let x2_post = sistema.agregar_variable("X2_Post", 1006.0, 1.0);
     let z2_post = sistema.agregar_variable("Z2_Post", 9940000.0, 1.0);
 
@@ -324,13 +347,19 @@ fn test_arbitraje_triangular_multi_hop() {
     let motor = MotorSpeculam::new();
     let solucion = motor.evaluar(&sistema);
 
-    if let SolucionEspejo::Pista { valores_ajustados, .. } = solucion {
+    if let SolucionEspejo::Pista {
+        valores_ajustados, ..
+    } = solucion
+    {
         let dy_in = valores_ajustados.get("DeltaY_In").unwrap();
         let dy_out = valores_ajustados.get("DeltaY_Out").unwrap();
         let ganancia = dy_out - dy_in;
 
         // Comprobar que el arbitraje triangular da ganancia positiva
-        assert!(ganancia > 10.0, "La ganancia triangular debería ser positiva (> 10 USDC)");
+        assert!(
+            ganancia > 10.0,
+            "La ganancia triangular debería ser positiva (> 10 USDC)"
+        );
         assert!(ganancia < 5000.0);
     } else {
         panic!("Se esperaba solución elástica de tipo Pista para arbitraje triangular");
