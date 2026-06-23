@@ -1,7 +1,7 @@
 # flat-constraint-mev-solver (S.P.E.C.U.L.A.M. Engine)
 
-[![Rust](https://img.shields.io/badge/rust-stable-brightgreen.svg)](https://www.rust-lang.org)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Solana MEV](https://img.shields.io/badge/Solana-MEV%20Optimized-orange.svg)](https://solana.com)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/Johnnyyydev/flat-constraint-mev-solver)
 [![Memory](https://img.shields.io/badge/allocations-zero%20heap-blueviolet.svg)](https://github.com/Johnnyyydev/flat-constraint-mev-solver)
@@ -95,10 +95,8 @@ Below are the benchmark timings obtained under strict release optimization profi
 
 ### Criterion Probability Density Plots
 
-Below are the probability density functions of the solver's latency across different system scales:
-
-| 10 Variables | 100 Variables | 1000 Variables |
-|--------------|---------------|----------------|
+| 10 Variables                          | 100 Variables                           | 1000 Variables                            |
+|---------------------------------------|-----------------------------------------|-------------------------------------------|
 | ![10 vars](assets/benchmark_10_vars.svg) | ![100 vars](assets/benchmark_100_vars.svg) | ![1000 vars](assets/benchmark_1000_vars.svg) |
 
 ---
