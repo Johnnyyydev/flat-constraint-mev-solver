@@ -119,16 +119,16 @@ async fn main() {
     );
     let raw_flow = r#"
         // Definition of elastic network topology
-        fixed(Nodo_Origen, 5.0)
-        elastic(Nodo_Puente, 2.0, 2.0)
-        var(Nodo_Destino, 15.0)
-        fixed(Fuga_Red, 1.0)
-        var(Nodo_Salida, 20.0)
+        fixed(Source_Node, 5.0)
+        elastic(Bridge_Node, 2.0, 2.0)
+        var(Dest_Node, 15.0)
+        fixed(Network_Leak, 1.0)
+        var(Exit_Node, 20.0)
 
         // Physical flow relations
-        Nodo_Origen * Nodo_Puente = Nodo_Destino
-        Nodo_Destino + Fuga_Red = Nodo_Salida
-        rango(Nodo_Salida, 0.0, 10.0)
+        Source_Node * Bridge_Node = Dest_Node
+        Dest_Node + Network_Leak = Exit_Node
+        range(Exit_Node, 0.0, 10.0)
     "#;
     println!(
         "Input Flow compiled autonomously by the Automaton:\n{}",
@@ -164,7 +164,7 @@ async fn main() {
     let nonce = system5.add_variable("Nonce", 10.0, 1.0); // Malleable
 
     system5.add_constraint(Constraint::ProductEquality {
-        name: "ecuacion_nonce".to_string(),
+        name: "nonce_equation".to_string(),
         factors: vec![nonce, factor],
         result: target,
     });
@@ -206,15 +206,15 @@ async fn main() {
     println!("Compiling base network topology for DePIN routing...");
 
     let depin_flow = r#"
-        fixed(Nodo_Origen, 5.0)
-        elastic(Nodo_Puente, 2.0, 2.0)
-        var(Nodo_Destino, 15.0)
-        fixed(Fuga_Red, 1.0)
-        var(Nodo_Salida, 20.0)
+        fixed(Source_Node, 5.0)
+        elastic(Bridge_Node, 2.0, 2.0)
+        var(Dest_Node, 15.0)
+        fixed(Network_Leak, 1.0)
+        var(Exit_Node, 20.0)
 
-        Nodo_Origen * Nodo_Puente = Nodo_Destino
-        Nodo_Destino + Fuga_Red = Nodo_Salida
-        rango(Nodo_Salida, 0.0, 10.0)
+        Source_Node * Bridge_Node = Dest_Node
+        Dest_Node + Network_Leak = Exit_Node
+        range(Exit_Node, 0.0, 10.0)
     "#;
 
     if let Ok(base_system) = Autogenesis::compile_raw_flow(depin_flow) {

@@ -55,7 +55,7 @@ fn main() {
             // Product Equation: V1 * V2 = V_next
             raw_data.push_str(&format!("V_{} * V_{} = V_{}\n", v1, v2, v_next));
             // Range Constraint on intermediate variable
-            raw_data.push_str(&format!("rango(V_{}, 0.0, 50.0)\n", v1));
+            raw_data.push_str(&format!("range(V_{}, 0.0, 50.0)\n", v1));
         }
     }
 

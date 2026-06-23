@@ -14,12 +14,12 @@ impl NetworkBridge {
 
         tokio::spawn(async move {
             let events = [
-                ("Nodo_Origen".to_string(), 8.0),
-                ("Fuga_Red".to_string(), 2.0),
-                ("Nodo_Origen".to_string(), 4.0),
-                ("Fuga_Red".to_string(), 0.5),
-                ("Nodo_Origen".to_string(), 6.5),
-                ("Fuga_Red".to_string(), 1.2),
+                ("Source_Node".to_string(), 8.0),
+                ("Network_Leak".to_string(), 2.0),
+                ("Source_Node".to_string(), 4.0),
+                ("Network_Leak".to_string(), 0.5),
+                ("Source_Node".to_string(), 6.5),
+                ("Network_Leak".to_string(), 1.2),
             ];
 
             let mut idx = 0;

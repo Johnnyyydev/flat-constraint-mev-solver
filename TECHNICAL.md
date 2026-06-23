@@ -15,7 +15,7 @@ Let a system contain $N$ variables $\mathbf{x} = [x_0, x_1, \dots, x_{N-1}]^T$ a
    $$T_r(\mathbf{x}) = \sum_{i \in \text{sumands}} x_i - y$$
 
 2. **Constant Product / AMM Constraints** ($\prod x_i = y$):
-   $$T_r(\mathbf{x}) = \left( \prod_{i \in \text{factores}} x_i \right) - y$$
+   $$T_r(\mathbf{x}) = \left( \prod_{i \in \text{factors}} x_i \right) - y$$
 
 3. **Range Constraints** ($x_i \in [x_{\min}, x_{\max}]$):
    $$T_r(\mathbf{x}) = \max(0, x_i - x_{\max}) - \max(0, x_{\min} - x_i)$$

@@ -116,7 +116,7 @@ fn test_quantum_jump_resolution() {
     let nonce = system.add_variable("Nonce", 10.0, 1.0);
 
     system.add_constraint(Constraint::ProductEquality {
-        name: "ecuacion_nonce".to_string(),
+        name: "nonce_equation".to_string(),
         factors: vec![nonce, factor],
         result: target,
     });

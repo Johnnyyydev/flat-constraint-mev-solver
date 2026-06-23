@@ -12,7 +12,7 @@ impl Autogenesis {
     /// - `fixed(A, 10)` -> Rigid variable A with value 10.0
     /// - `var(X, 12)` -> Elastic variable X with value 12.0 and elasticity 1.0 (default)
     /// - `elastic(Z, 5, 2.5)` -> Elastic variable Z with value 5.0 and elasticity 2.5
-    /// - `rango(X, 0, 100)` -> Range constraint: X in [0.0, 100.0]
+    /// - `range(X, 0, 100)` -> Range constraint: X in [0.0, 100.0]
     /// - `A + B = C` -> Sum equality constraint: A + B = C
     /// - `A * B = C` -> Product equality constraint: A * B = C
     /// - `A = B` -> Direct equality constraint: A = B
@@ -88,13 +88,13 @@ impl Autogenesis {
                     )
                 })?;
                 system.add_variable(name, value, 1.0);
-            } else if line.starts_with("rango(") && line.ends_with(')') {
-                // rango(variable, min, max)
+            } else if line.starts_with("range(") && line.ends_with(')') {
+                // range(variable, min, max)
                 let inner = &line[6..line.len() - 1];
                 let parts: Vec<&str> = inner.split(',').map(|s| s.trim()).collect();
                 if parts.len() != 3 {
                     return Err(format!(
-                        "Line {}: rango requires exactly 3 parameters",
+                        "Line {}: range requires exactly 3 parameters",
                         line_num + 1
                     ));
                 }

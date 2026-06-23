@@ -129,7 +129,7 @@ fn main() {
         var_b: delta_y_plus_target,
     });
 
-    // Precompute layout adyacencies
+    // Precompute layout adjacencies
     system.precompute_adjacencies();
 
     // 5. Execute elastic optimization
