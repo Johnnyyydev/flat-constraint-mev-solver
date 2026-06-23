@@ -13,20 +13,20 @@ A zero-allocation, parallel constraint solver in Rust built for ultra-low latenc
 Here is how easily you can define variables, add constraints, and solve them in 10 lines of code:
 
 ```rust
-use speculam_solver::{MotorSpeculam, SistemaRestricciones, Restriccion};
+use speculam_solver::{Constraint, ConstraintSystem, SpeculamEngine};
 
-let mut system = SistemaRestricciones::new();
-let a = system.agregar_variable("A", 10.0, 0.0); // Fixed variable
-let x = system.agregar_variable("X", 12.0, 1.0); // Elastic variable (elasticity = 1.0)
+let mut system = ConstraintSystem::new();
+let a = system.add_variable("A", 10.0, 0.0); // Fixed variable
+let x = system.add_variable("X", 12.0, 1.0); // Elastic variable (elasticity = 1.0)
 
 // Force equality constraint: A = X
-system.agregar_restriccion(Restriccion::IgualdadDirecta {
-    nombre: "eq_rule".to_string(), var_a: a, var_b: x,
+system.add_constraint(Constraint::DirectEquality {
+    name: "eq_rule".to_string(), var_a: a, var_b: x,
 });
-system.precalcular_adyacencias();
+system.precompute_adjacencies();
 
 // Solve via parallel spring-stress relaxation in microseconds
-let solution = MotorSpeculam::new().evaluar(&system);
+let solution = SpeculamEngine::new().evaluate(&system);
 ```
 
 ---
