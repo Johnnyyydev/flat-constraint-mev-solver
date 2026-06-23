@@ -79,6 +79,9 @@ Below are the benchmark timings obtained under strict release optimization profi
 - **Deep Relaxation / Cyclic Stressed Graphs (1000 Steps)**: **`~35.2 ms`** for 10 variables, scaling sub-linearly to **`~239.3 ms`** for 1000 variables.
 
 > [!NOTE]  
+> **Typical Arbitrage & Convergence**:  
+> A typical triangular arbitrage uses **~15-40 variables** and converges in **50-150 steps** (yielding `< 1.8 ms` total solver execution time). The 1000-step scaling timings shown below represent extreme stress-test benchmarks of deep mechanical relaxation on highly interconnected constraint loops.
+>
 > **Adaptive Execution Pathways**:  
 > To guarantee ultra-low latencies for live MEV, the solver implements threshold-based execution: systems with `< 250` variables or constraints completely bypass Rayon multi-threading. This eliminates the CPU overhead of thread pool scheduling, reducing small-scale convergence times to the microsecond level.
 
@@ -97,6 +100,14 @@ Below are the probability density functions of the solver's latency across diffe
 | 10 Variables | 100 Variables | 1000 Variables |
 |--------------|---------------|----------------|
 | ![10 vars](assets/benchmark_10_vars.svg) | ![100 vars](assets/benchmark_100_vars.svg) | ![1000 vars](assets/benchmark_1000_vars.svg) |
+
+---
+
+## 🔒 Project Versioning & Proprietary Notice
+
+This repository contains the **Open-Source Community Edition** of the S.P.E.C.U.L.A.M. solver. 
+
+Please note that **future and more advanced versions** of this engine—incorporating enterprise-grade optimizations such as custom Solana validator co-location, hardware-accelerated FPGA layouts, and private mempool/Jito bundle integration—**will be closed-source** and distributed under a proprietary commercial license.
 
 ---
 
@@ -138,14 +149,6 @@ Run the Criterion benchmark suite:
 ```bash
 cargo bench
 ```
-
----
-
-## 🔒 Project Versioning & Proprietary Notice
-
-This repository contains the **Open-Source Community Edition** of the S.P.E.C.U.L.A.M. solver. 
-
-Please note that **future and more advanced versions** of this engine—incorporating enterprise-grade optimizations such as custom Solana validator co-location, hardware-accelerated FPGA layouts, and private mempool/Jito bundle integration—**will be closed-source** and distributed under a proprietary commercial license.
 
 ---
 
