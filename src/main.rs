@@ -1,11 +1,11 @@
 use speculam_solver::{
-    Autogenesis, CampoEstres, MotorSpeculam, NetworkBridge, QuantumJumper, Restriccion,
-    SistemaRestricciones, SolucionEspejo,
+    Autogenesis, Constraint, ConstraintSystem, NetworkBridge, QuantumJumper, SpeculamEngine,
+    SpeculamSolution, StressField,
 };
 
 #[tokio::main]
 async fn main() {
-    // Colores ANSI para la presentación
+    // ANSI colors for styling
     let cyan = "\x1b[36;1m";
     let green = "\x1b[32;1m";
     let yellow = "\x1b[33;1m";
@@ -17,195 +17,195 @@ async fn main() {
         cyan, reset
     );
     println!(
-        "{}    S.P.E.C.U.L.A.M. v5 - PUENTE DE RED ASÍNCRONO EN VIVO    {}",
+        "{}   S.P.E.C.U.L.A.M. v5 - LIVE ASYNCHRONOUS NETWORK BRIDGE   {}",
         cyan, reset
     );
     println!(
         "{}=========================================================={}",
         cyan, reset
     );
-    println!("  Sistema Proactivo de Espejo para Colapsos Universales");
-    println!("  y Lógica Avanzada Matricial en Rust (Tokio Runtime)\n");
+    println!("  Proactive Mirror System for Universal Collapses");
+    println!("  and Advanced Matrix Logic in Rust (Tokio Runtime)\n");
 
-    let motor = MotorSpeculam::new();
-
-    // =========================================================================
-    // ESCENARIO 1: Contradicción Pura e Inflexible (10 + 1 = 12)
-    // =========================================================================
-    println!(
-        "{}--- ESCENARIO 1: Contradicción Pura (10 + 1 = 12) ---{}",
-        yellow, reset
-    );
-    println!("Variables fijas: A = 10, B = 1, C = 12");
-    println!("Restricción: A + B = C (Memoria Contigua)\n");
-
-    let mut sistema1 = SistemaRestricciones::new();
-    let a1 = sistema1.agregar_variable("A", 10.0, 0.0);
-    let b1 = sistema1.agregar_variable("B", 1.0, 0.0);
-    let c1 = sistema1.agregar_variable("C", 12.0, 0.0);
-
-    sistema1.agregar_restriccion(Restriccion::IgualdadSuma {
-        nombre: "suma_base".to_string(),
-        sumandos: vec![a1, b1],
-        resultado: c1,
-    });
-
-    sistema1.precalcular_adyacencias();
-    let analisis1 = motor.evaluar(&sistema1);
-    mostrar_resultado(&analisis1, cyan, green, red, reset);
+    let engine = SpeculamEngine::new();
 
     // =========================================================================
-    // ESCENARIO 2: Relajación Elástica (10 + 1 = X, con X maleable)
+    // SCENARIO 1: Pure & Rigid Contradiction (10 + 1 = 12)
     // =========================================================================
     println!(
-        "\n{}--- ESCENARIO 2: Relajación Elástica (10 + 1 = X, X inicial = 12) ---{}",
+        "{}--- SCENARIO 1: Pure Contradiction (10 + 1 = 12) ---{}",
         yellow, reset
     );
-    println!("Variables: A = 10 (fija), B = 1 (fija), X = 12 (MALEABLE, elasticidad = 1.0)\n");
+    println!("Fixed variables: A = 10, B = 1, C = 12");
+    println!("Constraint: A + B = C (Contiguous Memory)\n");
 
-    let mut sistema2 = SistemaRestricciones::new();
-    let a2 = sistema2.agregar_variable("A", 10.0, 0.0);
-    let b2 = sistema2.agregar_variable("B", 1.0, 0.0);
-    let x2 = sistema2.agregar_variable("X", 12.0, 1.0);
+    let mut system1 = ConstraintSystem::new();
+    let a1 = system1.add_variable("A", 10.0, 0.0);
+    let b1 = system1.add_variable("B", 1.0, 0.0);
+    let c1 = system1.add_variable("C", 12.0, 0.0);
 
-    sistema2.agregar_restriccion(Restriccion::IgualdadSuma {
-        nombre: "suma_maleable".to_string(),
-        sumandos: vec![a2, b2],
-        resultado: x2,
+    system1.add_constraint(Constraint::SumEquality {
+        name: "base_sum".to_string(),
+        sumands: vec![a1, b1],
+        result: c1,
     });
 
-    sistema2.precalcular_adyacencias();
-    let analisis2 = motor.evaluar(&sistema2);
-    mostrar_resultado(&analisis2, cyan, green, red, reset);
+    system1.precompute_adjacencies();
+    let analysis1 = engine.evaluate(&system1);
+    show_result(&analysis1, cyan, green, red, reset);
 
     // =========================================================================
-    // ESCENARIO 3: Grafo de Conflicto Cíclico
+    // SCENARIO 2: Elastic Relaxation (10 + 1 = X, with X malleable)
     // =========================================================================
     println!(
-        "\n{}--- ESCENARIO 3: Grafo de Conflicto Cíclico ---{}",
+        "\n{}--- SCENARIO 2: Elastic Relaxation (10 + 1 = X, initial X = 12) ---{}",
         yellow, reset
     );
-    println!("Variables: A = 3.0 (fija), B = 4.0 (fija), Z = 5.0 (maleable, elasticidad = 1.0)");
-    println!("Restricciones: A + B = Z  &  Z + B = 10\n");
+    println!("Variables: A = 10 (fixed), B = 1 (fixed), X = 12 (MALLEABLE, elasticity = 1.0)\n");
 
-    let mut sistema3 = SistemaRestricciones::new();
-    let a3 = sistema3.agregar_variable("A", 3.0, 0.0);
-    let b3 = sistema3.agregar_variable("B", 4.0, 0.0);
-    let const_10 = sistema3.agregar_variable("Const_10", 10.0, 0.0);
-    let z3 = sistema3.agregar_variable("Z", 5.0, 1.0);
+    let mut system2 = ConstraintSystem::new();
+    let a2 = system2.add_variable("A", 10.0, 0.0);
+    let b2 = system2.add_variable("B", 1.0, 0.0);
+    let x2 = system2.add_variable("X", 12.0, 1.0);
 
-    sistema3.agregar_restriccion(Restriccion::IgualdadSuma {
-        nombre: "relacion_A_B_Z".to_string(),
-        sumandos: vec![a3, b3],
-        resultado: z3,
+    system2.add_constraint(Constraint::SumEquality {
+        name: "malleable_sum".to_string(),
+        sumands: vec![a2, b2],
+        result: x2,
     });
 
-    sistema3.agregar_restriccion(Restriccion::IgualdadSuma {
-        nombre: "relacion_Z_B_10".to_string(),
-        sumandos: vec![z3, b3],
-        resultado: const_10,
-    });
-
-    sistema3.precalcular_adyacencias();
-    let analisis3 = motor.evaluar(&sistema3);
-    mostrar_resultado(&analisis3, cyan, green, red, reset);
+    system2.precompute_adjacencies();
+    let analysis2 = engine.evaluate(&system2);
+    show_result(&analysis2, cyan, green, red, reset);
 
     // =========================================================================
-    // ESCENARIO 4: Autogénesis y Balance Elástico DePIN
+    // SCENARIO 3: Cyclic Conflict Graph
     // =========================================================================
     println!(
-        "\n{}--- ESCENARIO 4: Autogénesis Autónoma e Ingesta Caótica DePIN ---{}",
+        "\n{}--- SCENARIO 3: Cyclic Conflict Graph ---{}",
         yellow, reset
     );
-    let flujo_crudo = r#"
-        // Definición de topología de red elástica
+    println!("Variables: A = 3.0 (fixed), B = 4.0 (fixed), Z = 5.0 (malleable, elasticity = 1.0)");
+    println!("Constraints: A + B = Z  &  Z + B = 10\n");
+
+    let mut system3 = ConstraintSystem::new();
+    let a3 = system3.add_variable("A", 3.0, 0.0);
+    let b3 = system3.add_variable("B", 4.0, 0.0);
+    let const_10 = system3.add_variable("Const_10", 10.0, 0.0);
+    let z3 = system3.add_variable("Z", 5.0, 1.0);
+
+    system3.add_constraint(Constraint::SumEquality {
+        name: "relation_A_B_Z".to_string(),
+        sumands: vec![a3, b3],
+        result: z3,
+    });
+
+    system3.add_constraint(Constraint::SumEquality {
+        name: "relation_Z_B_10".to_string(),
+        sumands: vec![z3, b3],
+        result: const_10,
+    });
+
+    system3.precompute_adjacencies();
+    let analysis3 = engine.evaluate(&system3);
+    show_result(&analysis3, cyan, green, red, reset);
+
+    // =========================================================================
+    // SCENARIO 4: Autogenesis & DePIN Elastic Balance
+    // =========================================================================
+    println!(
+        "\n{}--- SCENARIO 4: Autonomous Autogenesis & Chaotic DePIN Ingestion ---{}",
+        yellow, reset
+    );
+    let raw_flow = r#"
+        // Definition of elastic network topology
         fixed(Nodo_Origen, 5.0)
         elastic(Nodo_Puente, 2.0, 2.0)
         var(Nodo_Destino, 15.0)
         fixed(Fuga_Red, 1.0)
         var(Nodo_Salida, 20.0)
 
-        // Relaciones físicas del flujo
+        // Physical flow relations
         Nodo_Origen * Nodo_Puente = Nodo_Destino
         Nodo_Destino + Fuga_Red = Nodo_Salida
         rango(Nodo_Salida, 0.0, 10.0)
     "#;
     println!(
-        "Flujo de Entrada compilado autónomamente por el Autómata:\n{}",
-        flujo_crudo
+        "Input Flow compiled autonomously by the Automaton:\n{}",
+        raw_flow
     );
 
-    match Autogenesis::compilar_flujo_crudo(flujo_crudo) {
-        Ok(sistema4) => {
-            let analisis4 = motor.evaluar(&sistema4);
-            mostrar_resultado(&analisis4, cyan, green, red, reset);
+    match Autogenesis::compile_raw_flow(raw_flow) {
+        Ok(system4) => {
+            let analysis4 = engine.evaluate(&system4);
+            show_result(&analysis4, cyan, green, red, reset);
         }
         Err(e) => {
-            println!("{}Error de Autogénesis: {}{}", red, e, reset);
+            println!("{}Autogenesis Error: {}{}", red, e, reset);
         }
     }
 
     // =========================================================================
-    // ESCENARIO 5: Búsqueda Discreta de Nonce (Saltador Cuántico)
+    // SCENARIO 5: Discrete Nonce Search (Quantum Jumper)
     // =========================================================================
     println!(
-        "\n{}--- ESCENARIO 5: Búsqueda Discreta de Nonce (Saltador Cuántico) ---{}",
+        "\n{}--- SCENARIO 5: Discrete Nonce Search (Quantum Jumper) ---{}",
         yellow, reset
     );
-    println!("Objetivo: Encontrar un nonce entero 'Nonce' tal que:");
-    println!("  - Nonce * 7.0 = 581.0  => (Solución matemática discreta: 83)");
+    println!("Objective: Find an integer nonce 'Nonce' such that:");
+    println!("  - Nonce * 7.0 = 581.0  => (Discrete mathematical solution: 83)");
     println!(
-        "  - 'Nonce' se inicia en 10.0 y se le obliga elásticamente a cristalizar en entero.\n"
+        "  - 'Nonce' starts at 10.0 and is elastically forced to crystallize as an integer.\n"
     );
 
-    let mut sistema5 = SistemaRestricciones::new();
-    let factor = sistema5.agregar_variable("Factor", 7.0, 0.0);
-    let target = sistema5.agregar_variable("Target", 581.0, 0.0);
-    let nonce = sistema5.agregar_variable("Nonce", 10.0, 1.0); // Maleable
+    let mut system5 = ConstraintSystem::new();
+    let factor = system5.add_variable("Factor", 7.0, 0.0);
+    let target = system5.add_variable("Target", 581.0, 0.0);
+    let nonce = system5.add_variable("Nonce", 10.0, 1.0); // Malleable
 
-    sistema5.agregar_restriccion(Restriccion::IgualdadProducto {
-        nombre: "ecuacion_nonce".to_string(),
-        factores: vec![nonce, factor],
-        resultado: target,
+    system5.add_constraint(Constraint::ProductEquality {
+        name: "ecuacion_nonce".to_string(),
+        factors: vec![nonce, factor],
+        result: target,
     });
 
     let jumper = QuantumJumper::new();
-    println!("Iniciando recocido periódico elástico de coordenadas discretas...");
+    println!("Starting periodic elastic annealing of discrete coordinates...");
 
-    sistema5.precalcular_adyacencias();
-    match jumper.saltar_espacio_discreto(&sistema5, &[nonce]) {
-        Some(valores) => {
-            println!("{}>>> ÉXITO: SALTO CUÁNTICO COMPLETADO <<<{}", green, reset);
-            let nonce_val = valores.get("Nonce").unwrap();
-            println!("  - 'Nonce' entero encontrado: {:.1}", nonce_val);
+    system5.precompute_adjacencies();
+    match jumper.jump_discrete_space(&system5, &[nonce]) {
+        Some(values) => {
+            println!("{}>>> SUCCESS: QUANTUM JUMP COMPLETED <<<{}", green, reset);
+            let nonce_val = values.get("Nonce").unwrap();
+            println!("  - Integer 'Nonce' found: {:.1}", nonce_val);
 
-            // Verificación del estrés
-            let mut verificador = sistema5.clone();
-            verificador.valores[nonce] = *nonce_val;
-            let estres_final = CampoEstres::calcular(&verificador);
+            // Stress verification
+            let mut verifier = system5.clone();
+            verifier.values[nonce] = *nonce_val;
+            let final_stress = StressField::calculate(&verifier);
             println!(
-                "  - Energía residual del sistema con nonce entero: {:.4}",
-                estres_final.energia_total
+                "  - Residual system energy with integer nonce: {:.4}",
+                final_stress.total_energy
             );
         }
         None => {
             println!(
-                "{}>>> ERROR: No se pudo cristalizar el nonce discreto <<<{}",
+                "{}>>> ERROR: Could not crystallize discrete nonce <<<{}",
                 red, reset
             );
         }
     }
 
     // =========================================================================
-    // ESCENARIO 6: Puente de Red Asíncrono en Caliente (Ingesta en Vivo)
+    // SCENARIO 6: Hot Asynchronous Network Bridge (Live Ingestion)
     // =========================================================================
     println!(
-        "\n{}--- ESCENARIO 6: Puente de Red Asíncrono (Ingesta e Integración en Vivo) ---{}",
+        "\n{}--- SCENARIO 6: Asynchronous Network Bridge (Live Ingestion & Integration) ---{}",
         yellow, reset
     );
-    println!("Compilando la topología de red base para enrutamiento DePIN...");
+    println!("Compiling base network topology for DePIN routing...");
 
-    let flujo_depin = r#"
+    let depin_flow = r#"
         fixed(Nodo_Origen, 5.0)
         elastic(Nodo_Puente, 2.0, 2.0)
         var(Nodo_Destino, 15.0)
@@ -217,18 +217,18 @@ async fn main() {
         rango(Nodo_Salida, 0.0, 10.0)
     "#;
 
-    if let Ok(sistema_base) = Autogenesis::compilar_flujo_crudo(flujo_depin) {
-        let rx = NetworkBridge::iniciar_stream_simulado(600); // Updates every 600ms
+    if let Ok(base_system) = Autogenesis::compile_raw_flow(depin_flow) {
+        let rx = NetworkBridge::start_simulated_stream(600); // Updates every 600ms
 
-        println!("Iniciando procesamiento continuo en segundo plano (duración: 4 segundos)...");
+        println!("Starting continuous background processing (duration: 4 seconds)...");
         let bridge_handle = tokio::spawn(async move {
-            NetworkBridge::procesar_flujo(rx, sistema_base).await;
+            NetworkBridge::process_flow(rx, base_system).await;
         });
 
-        // Dejar correr la simulación de telemetría por 4 segundos
+        // Let telemetry simulation run for 4 seconds
         tokio::time::sleep(std::time::Duration::from_secs(4)).await;
         bridge_handle.abort();
-        println!("\n[MAIN] Stream de telemetría finalizado correctamente.");
+        println!("\n[MAIN] Asynchronous telemetry stream finished correctly.");
     }
 
     println!(
@@ -236,7 +236,7 @@ async fn main() {
         cyan, reset
     );
     println!(
-        "{}             FIN DEL ANÁLISIS DE AUTÓMATA ESPEJO v5       {}",
+        "{}            END OF S.P.E.C.U.L.A.M. ENGINE ANALYSIS        {}",
         cyan, reset
     );
     println!(
@@ -245,43 +245,40 @@ async fn main() {
     );
 }
 
-fn mostrar_resultado(solucion: &SolucionEspejo, cyan: &str, green: &str, red: &str, reset: &str) {
-    match solucion {
-        SolucionEspejo::Directa { valores } => {
+fn show_result(solution: &SpeculamSolution, cyan: &str, green: &str, red: &str, reset: &str) {
+    match solution {
+        SpeculamSolution::Direct { values } => {
             println!(
-                "{}>>> SOLUCIÓN DIRECTA ENCONTRADA (Sin Tensión) <<<{}",
+                "{}>>> DIRECT SOLUTION FOUND (No Tension) <<<{}",
                 green, reset
             );
-            let mut ordenados: Vec<_> = valores.iter().collect();
-            ordenados.sort_by_key(|a| a.0);
-            for (var, val) in ordenados {
+            let mut sorted: Vec<_> = values.iter().collect();
+            sorted.sort_by_key(|a| a.0);
+            for (var, val) in sorted {
                 println!("  - Variable '{}': {:.4}", var, val);
             }
         }
-        SolucionEspejo::Pista {
-            explicacion,
-            valores_ajustados,
+        SpeculamSolution::Hint {
+            explanation,
+            adjusted_values,
             ..
         } => {
             println!(
-                "{}>>> MENTE PROPIA: RUTA LOGICA ALTERNATIVA (COLAPSO DE FASE) <<<{}",
+                "{}>>> SPECULAM SOLVER: ALTERNATIVE PATH (PHASE COLLAPSE) <<<{}",
                 cyan, reset
             );
-            println!("{}", explicacion);
-            println!("Valores finales en el equilibrio:");
-            let mut ordenados: Vec<_> = valores_ajustados.iter().collect();
-            ordenados.sort_by_key(|a| a.0);
-            for (var, val) in ordenados {
+            println!("{}", explanation);
+            println!("Final values in equilibrium:");
+            let mut sorted: Vec<_> = adjusted_values.iter().collect();
+            sorted.sort_by_key(|a| a.0);
+            for (var, val) in sorted {
                 println!("  - '{}' = {:.4}", var, val);
             }
         }
-        SolucionEspejo::ComplejidadAlta { estres, mensaje } => {
-            println!(
-                "{}>>> ERROR: COMPLEJIDAD FUERA DE LÍMITES <<<{}",
-                red, reset
-            );
-            println!("Mensaje: {}", mensaje);
-            println!("Energía residual del sistema: {:.4}", estres.energia_total);
+        SpeculamSolution::HighComplexity { stress, message } => {
+            println!("{}>>> ERROR: COMPLEXITY BEYOND LIMITS <<<{}", red, reset);
+            println!("Message: {}", message);
+            println!("Residual system energy: {:.4}", stress.total_energy);
         }
     }
     println!();

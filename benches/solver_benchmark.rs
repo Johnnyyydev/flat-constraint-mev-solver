@@ -1,43 +1,43 @@
 use criterion::{Criterion, criterion_group, criterion_main};
-use speculam_solver::{MotorSpeculam, Restriccion, SistemaRestricciones};
+use speculam_solver::{Constraint, ConstraintSystem, SpeculamEngine};
 
-fn crear_sistema_benchmark(num_variables: usize) -> SistemaRestricciones {
-    let mut sistema = SistemaRestricciones::new();
+fn create_benchmark_system(num_variables: usize) -> ConstraintSystem {
+    let mut system = ConstraintSystem::new();
     let mut vars = Vec::new();
 
-    // Agregar variables elásticas
+    // Add elastic variables
     for i in 0..num_variables {
-        let var = sistema.agregar_variable(&format!("x_{}", i), i as f64 * 1.5, 1.0);
+        let var = system.add_variable(&format!("x_{}", i), i as f64 * 1.5, 1.0);
         vars.push(var);
     }
 
-    // Añadir restricciones de suma secuenciales para generar estrés en el grafo
+    // Add sequential sum constraints to generate graph stress
     for i in 0..(num_variables - 1) {
-        sistema.agregar_restriccion(Restriccion::IgualdadSuma {
-            nombre: format!("suma_{}", i),
-            sumandos: vec![vars[i]],
-            resultado: vars[i + 1],
+        system.add_constraint(Constraint::SumEquality {
+            name: format!("sum_{}", i),
+            sumands: vec![vars[i]],
+            result: vars[i + 1],
         });
     }
 
-    sistema.precalcular_adyacencias();
-    sistema
+    system.precompute_adjacencies();
+    system
 }
 
 fn bench_solver(c: &mut Criterion) {
-    let sistema_10 = crear_sistema_benchmark(10);
-    let sistema_100 = crear_sistema_benchmark(100);
-    let sistema_1000 = crear_sistema_benchmark(1000);
-    let motor = MotorSpeculam::new();
+    let system_10 = create_benchmark_system(10);
+    let system_100 = create_benchmark_system(100);
+    let system_1000 = create_benchmark_system(1000);
+    let engine = SpeculamEngine::new();
 
-    c.bench_function("solver_10_vars", |b| b.iter(|| motor.evaluar(&sistema_10)));
+    c.bench_function("solver_10_vars", |b| b.iter(|| engine.evaluate(&system_10)));
 
     c.bench_function("solver_100_vars", |b| {
-        b.iter(|| motor.evaluar(&sistema_100))
+        b.iter(|| engine.evaluate(&system_100))
     });
 
     c.bench_function("solver_1000_vars", |b| {
-        b.iter(|| motor.evaluar(&sistema_1000))
+        b.iter(|| engine.evaluate(&system_1000))
     });
 }
 

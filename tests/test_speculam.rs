@@ -1,367 +1,359 @@
 use speculam_solver::{
-    Autogenesis, MotorSpeculam, QuantumJumper, Restriccion, SistemaRestricciones, SolucionEspejo,
+    Autogenesis, Constraint, ConstraintSystem, QuantumJumper, SpeculamEngine, SpeculamSolution,
 };
 
 #[test]
-fn test_sistema_coherente_directo() {
-    let mut sistema = SistemaRestricciones::new();
-    let x = sistema.agregar_variable("x", 5.0, 0.0);
-    let y = sistema.agregar_variable("y", 10.0, 0.0);
-    let z = sistema.agregar_variable("z", 15.0, 0.0);
+fn test_coherent_system_direct() {
+    let mut system = ConstraintSystem::new();
+    let x = system.add_variable("x", 5.0, 0.0);
+    let y = system.add_variable("y", 10.0, 0.0);
+    let z = system.add_variable("z", 15.0, 0.0);
 
-    sistema.agregar_restriccion(Restriccion::IgualdadSuma {
-        nombre: "x_mas_y_eq_z".to_string(),
-        sumandos: vec![x, y],
-        resultado: z,
+    system.add_constraint(Constraint::SumEquality {
+        name: "x_plus_y_eq_z".to_string(),
+        sumands: vec![x, y],
+        result: z,
     });
 
-    let motor = MotorSpeculam::new();
-    sistema.precalcular_adyacencias();
-    let solucion = motor.evaluar(&sistema);
+    let engine = SpeculamEngine::new();
+    system.precompute_adjacencies();
+    let solution = engine.evaluate(&system);
 
-    assert!(matches!(solucion, SolucionEspejo::Directa { .. }));
+    assert!(matches!(solution, SpeculamSolution::Direct { .. }));
 }
 
 #[test]
-fn test_contradiccion_rigida_genera_pista() {
-    let mut sistema = SistemaRestricciones::new();
-    let a = sistema.agregar_variable("A", 10.0, 0.0);
-    let b = sistema.agregar_variable("B", 1.0, 0.0);
-    let c = sistema.agregar_variable("C", 12.0, 0.0);
+fn test_rigid_contradiction_generates_hint() {
+    let mut system = ConstraintSystem::new();
+    let a = system.add_variable("A", 10.0, 0.0);
+    let b = system.add_variable("B", 1.0, 0.0);
+    let c = system.add_variable("C", 12.0, 0.0);
 
-    sistema.agregar_restriccion(Restriccion::IgualdadSuma {
-        nombre: "suma_invalida".to_string(),
-        sumandos: vec![a, b],
-        resultado: c,
+    system.add_constraint(Constraint::SumEquality {
+        name: "invalid_sum".to_string(),
+        sumands: vec![a, b],
+        result: c,
     });
 
-    let motor = MotorSpeculam::new();
-    sistema.precalcular_adyacencias();
-    let solucion = motor.evaluar(&sistema);
+    let engine = SpeculamEngine::new();
+    system.precompute_adjacencies();
+    let solution = engine.evaluate(&system);
 
-    if let SolucionEspejo::Pista {
-        tensiones_residuales,
-        ..
-    } = solucion
+    if let SpeculamSolution::Hint {
+        residual_tensions, ..
+    } = solution
     {
-        let tension = tensiones_residuales.get("suma_invalida").unwrap();
+        let tension = residual_tensions.get("invalid_sum").unwrap();
         assert!((tension - (-1.0)).abs() < 1e-5);
     } else {
-        panic!("Se esperaba una sugerencia de colapso de fase");
+        panic!("Expected a phase collapse Hint");
     }
 }
 
 #[test]
-fn test_relajacion_elastica() {
-    let mut sistema = SistemaRestricciones::new();
-    let a = sistema.agregar_variable("A", 10.0, 0.0);
-    let b = sistema.agregar_variable("B", 1.0, 0.0);
-    let x = sistema.agregar_variable("X", 12.0, 1.0);
+fn test_elastic_relaxation() {
+    let mut system = ConstraintSystem::new();
+    let a = system.add_variable("A", 10.0, 0.0);
+    let b = system.add_variable("B", 1.0, 0.0);
+    let x = system.add_variable("X", 12.0, 1.0);
 
-    sistema.agregar_restriccion(Restriccion::IgualdadSuma {
-        nombre: "suma_relajable".to_string(),
-        sumandos: vec![a, b],
-        resultado: x,
+    system.add_constraint(Constraint::SumEquality {
+        name: "relaxable_sum".to_string(),
+        sumands: vec![a, b],
+        result: x,
     });
 
-    let motor = MotorSpeculam::new();
-    sistema.precalcular_adyacencias();
-    let solucion = motor.evaluar(&sistema);
+    let engine = SpeculamEngine::new();
+    system.precompute_adjacencies();
+    let solution = engine.evaluate(&system);
 
-    if let SolucionEspejo::Pista {
-        valores_ajustados,
-        desviaciones,
+    if let SpeculamSolution::Hint {
+        adjusted_values,
+        deviations,
         ..
-    } = solucion
+    } = solution
     {
-        let x_final = valores_ajustados.get("X").unwrap();
+        let x_final = adjusted_values.get("X").unwrap();
         assert!((x_final - 11.0).abs() < 1e-4);
 
-        let x_desviacion = desviaciones.get("X").unwrap();
-        assert!((x_desviacion - (-1.0)).abs() < 1e-4);
+        let x_deviation = deviations.get("X").unwrap();
+        assert!((x_deviation - (-1.0)).abs() < 1e-4);
     } else {
-        panic!("Se esperaba una relajación elástica");
+        panic!("Expected an elastic relaxation");
     }
 }
 
 #[test]
-fn test_autogenesis_y_resolucion() {
-    let flujo_crudo = r#"
+fn test_autogenesis_and_resolution() {
+    let raw_flow = r#"
         fixed(A, 5.0)
         fixed(B, 3.0)
         var(X, 10.0)
         A * B = X
     "#;
 
-    let sistema = Autogenesis::compilar_flujo_crudo(flujo_crudo).unwrap();
-    let motor = MotorSpeculam::new();
-    let solucion = motor.evaluar(&sistema);
+    let system = Autogenesis::compile_raw_flow(raw_flow).unwrap();
+    let engine = SpeculamEngine::new();
+    let solution = engine.evaluate(&system);
 
-    if let SolucionEspejo::Pista {
-        valores_ajustados, ..
-    } = solucion
+    if let SpeculamSolution::Hint {
+        adjusted_values, ..
+    } = solution
     {
-        let x_final = valores_ajustados.get("X").unwrap();
-        // X debe aproximarse a 5 * 3 = 15
+        let x_final = adjusted_values.get("X").unwrap();
+        // X must converge near 5 * 3 = 15
         assert!((x_final - 15.0).abs() < 1e-4);
     } else {
-        panic!("Se esperaba una relajación de X a 15");
+        panic!("Expected X to relax near 15");
     }
 }
 
 #[test]
-fn test_quantum_jump_resolucion() {
-    let mut sistema = SistemaRestricciones::new();
-    let factor = sistema.agregar_variable("Factor", 7.0, 0.0);
-    let target = sistema.agregar_variable("Target", 581.0, 0.0);
-    let nonce = sistema.agregar_variable("Nonce", 10.0, 1.0);
+fn test_quantum_jump_resolution() {
+    let mut system = ConstraintSystem::new();
+    let factor = system.add_variable("Factor", 7.0, 0.0);
+    let target = system.add_variable("Target", 581.0, 0.0);
+    let nonce = system.add_variable("Nonce", 10.0, 1.0);
 
-    sistema.agregar_restriccion(Restriccion::IgualdadProducto {
-        nombre: "ecuacion_nonce".to_string(),
-        factores: vec![nonce, factor],
-        resultado: target,
+    system.add_constraint(Constraint::ProductEquality {
+        name: "ecuacion_nonce".to_string(),
+        factors: vec![nonce, factor],
+        result: target,
     });
 
     let jumper = QuantumJumper::new();
-    sistema.precalcular_adyacencias();
-    let solucion = jumper.saltar_espacio_discreto(&sistema, &[nonce]).unwrap();
+    system.precompute_adjacencies();
+    let solution = jumper.jump_discrete_space(&system, &[nonce]).unwrap();
 
-    let nonce_final = solucion.get("Nonce").unwrap();
+    let nonce_final = solution.get("Nonce").unwrap();
     assert!((nonce_final - 83.0).abs() < 1e-5);
 }
 
 #[test]
-fn test_arbitraje_mev_orca_raydium() {
-    let mut sistema = SistemaRestricciones::new();
+fn test_mev_arbitrage_orca_raydium() {
+    let mut system = ConstraintSystem::new();
 
-    // Pool A (Orca) - SOL subvaluado (150 USDC/SOL)
-    let x_orca = sistema.agregar_variable("X_Orca", 1000.0, 0.0);
-    let y_orca = sistema.agregar_variable("Y_Orca", 150000.0, 0.0);
-    let k_orca = sistema.agregar_variable("K_Orca", 150000000.0, 0.0);
+    // Pool A (Orca) - SOL undervalued (150 USDC/SOL)
+    let x_orca = system.add_variable("X_Orca", 1000.0, 0.0);
+    let y_orca = system.add_variable("Y_Orca", 150000.0, 0.0);
+    let k_orca = system.add_variable("K_Orca", 150000000.0, 0.0);
 
-    // Pool B (Raydium) - SOL sobrevaluado (160 USDC/SOL)
-    let x_raydium = sistema.agregar_variable("X_Raydium", 1000.0, 0.0);
-    let y_raydium = sistema.agregar_variable("Y_Raydium", 160000.0, 0.0);
-    let k_raydium = sistema.agregar_variable("K_Raydium", 160000000.0, 0.0);
+    // Pool B (Raydium) - SOL overvalued (160 USDC/SOL)
+    let x_raydium = system.add_variable("X_Raydium", 1000.0, 0.0);
+    let y_raydium = system.add_variable("Y_Raydium", 160000.0, 0.0);
+    let k_raydium = system.add_variable("K_Raydium", 160000000.0, 0.0);
 
-    // Variables de swap
-    let delta_y = sistema.agregar_variable("DeltaY", 1000.0, 1.0);
-    let delta_x = sistema.agregar_variable("DeltaX", 6.0, 1.0);
-    let delta_y_out = sistema.agregar_variable("DeltaY_Out", 1000.0, 1.0);
+    // Swap variables
+    let delta_y = system.add_variable("DeltaY", 1000.0, 1.0);
+    let delta_x = system.add_variable("DeltaX", 6.0, 1.0);
+    let delta_y_out = system.add_variable("DeltaY_Out", 1000.0, 1.0);
 
-    let x_orca_post = sistema.agregar_variable("X_Orca_Post", 994.0, 1.0);
-    let y_orca_post = sistema.agregar_variable("Y_Orca_Post", 151000.0, 1.0);
+    let x_orca_post = system.add_variable("X_Orca_Post", 994.0, 1.0);
+    let y_orca_post = system.add_variable("Y_Orca_Post", 151000.0, 1.0);
 
-    let x_raydium_post = sistema.agregar_variable("X_Raydium_Post", 1006.0, 1.0);
-    let y_raydium_post = sistema.agregar_variable("Y_Raydium_Post", 159000.0, 1.0);
+    let x_raydium_post = system.add_variable("X_Raydium_Post", 1006.0, 1.0);
+    let y_raydium_post = system.add_variable("Y_Raydium_Post", 159000.0, 1.0);
 
-    // Restricciones físicas
-    sistema.agregar_restriccion(Restriccion::IgualdadSuma {
-        nombre: "orca_suma_y".to_string(),
-        sumandos: vec![y_orca, delta_y],
-        resultado: y_orca_post,
+    // Constraints
+    system.add_constraint(Constraint::SumEquality {
+        name: "orca_sum_y".to_string(),
+        sumands: vec![y_orca, delta_y],
+        result: y_orca_post,
     });
-    sistema.agregar_restriccion(Restriccion::IgualdadSuma {
-        nombre: "orca_resta_x".to_string(),
-        sumandos: vec![x_orca_post, delta_x],
-        resultado: x_orca,
+    system.add_constraint(Constraint::SumEquality {
+        name: "orca_sub_x".to_string(),
+        sumands: vec![x_orca_post, delta_x],
+        result: x_orca,
     });
-    sistema.agregar_restriccion(Restriccion::IgualdadProducto {
-        nombre: "orca_amm".to_string(),
-        factores: vec![x_orca_post, y_orca_post],
-        resultado: k_orca,
-    });
-
-    sistema.agregar_restriccion(Restriccion::IgualdadSuma {
-        nombre: "ray_suma_x".to_string(),
-        sumandos: vec![x_raydium, delta_x],
-        resultado: x_raydium_post,
-    });
-    sistema.agregar_restriccion(Restriccion::IgualdadSuma {
-        nombre: "ray_resta_y".to_string(),
-        sumandos: vec![y_raydium_post, delta_y_out],
-        resultado: y_raydium,
-    });
-    sistema.agregar_restriccion(Restriccion::IgualdadProducto {
-        nombre: "ray_amm".to_string(),
-        factores: vec![x_raydium_post, y_raydium_post],
-        resultado: k_raydium,
+    system.add_constraint(Constraint::ProductEquality {
+        name: "orca_amm".to_string(),
+        factors: vec![x_orca_post, y_orca_post],
+        result: k_orca,
     });
 
-    // Rango límite
-    sistema.agregar_restriccion(Restriccion::Rango {
-        nombre: "limite_delta_y".to_string(),
+    system.add_constraint(Constraint::SumEquality {
+        name: "ray_sum_x".to_string(),
+        sumands: vec![x_raydium, delta_x],
+        result: x_raydium_post,
+    });
+    system.add_constraint(Constraint::SumEquality {
+        name: "ray_sub_y".to_string(),
+        sumands: vec![y_raydium_post, delta_y_out],
+        result: y_raydium,
+    });
+    system.add_constraint(Constraint::ProductEquality {
+        name: "ray_amm".to_string(),
+        factors: vec![x_raydium_post, y_raydium_post],
+        result: k_raydium,
+    });
+
+    // Safety range
+    system.add_constraint(Constraint::Range {
+        name: "limit_delta_y".to_string(),
         variable: delta_y,
         min: 0.0,
         max: 50000.0,
     });
 
-    // Atractor de ganancia
-    let objetivo_ganancia = sistema.agregar_variable("Objetivo_Ganancia", 50000.0, 0.0);
-    let delta_y_mas_objetivo = sistema.agregar_variable("DeltaY_Mas_Objetivo", 51000.0, 1.0);
+    // Attractor
+    let profit_target = system.add_variable("Profit_Target", 50000.0, 0.0);
+    let delta_y_plus_target = system.add_variable("DeltaY_Plus_Target", 51000.0, 1.0);
 
-    sistema.agregar_restriccion(Restriccion::IgualdadSuma {
-        nombre: "suma_objetivo".to_string(),
-        sumandos: vec![delta_y, objetivo_ganancia],
-        resultado: delta_y_mas_objetivo,
+    system.add_constraint(Constraint::SumEquality {
+        name: "sum_target".to_string(),
+        sumands: vec![delta_y, profit_target],
+        result: delta_y_plus_target,
     });
-    sistema.agregar_restriccion(Restriccion::IgualdadDirecta {
-        nombre: "atraccion_ganancia".to_string(),
+    system.add_constraint(Constraint::DirectEquality {
+        name: "profit_attractor".to_string(),
         var_a: delta_y_out,
-        var_b: delta_y_mas_objetivo,
+        var_b: delta_y_plus_target,
     });
 
-    sistema.precalcular_adyacencias();
+    system.precompute_adjacencies();
 
-    let motor = MotorSpeculam::new();
-    let solucion = motor.evaluar(&sistema);
+    let engine = SpeculamEngine::new();
+    let solution = engine.evaluate(&system);
 
-    if let SolucionEspejo::Pista {
-        valores_ajustados, ..
-    } = solucion
+    if let SpeculamSolution::Hint {
+        adjusted_values, ..
+    } = solution
     {
-        let dy = valores_ajustados.get("DeltaY").unwrap();
-        let dy_out = valores_ajustados.get("DeltaY_Out").unwrap();
-        let ganancia = dy_out - dy;
+        let dy = adjusted_values.get("DeltaY").unwrap();
+        let dy_out = adjusted_values.get("DeltaY_Out").unwrap();
+        let profit = dy_out - dy;
 
-        // Comprobar que el arbitraje da ganancia positiva
         assert!(
-            ganancia > 50.0,
-            "La ganancia optimizada debería ser sustancial (> 50 USDC)"
+            profit > 50.0,
+            "Optimized profit should be substantial (> 50 USDC)"
         );
-        assert!(
-            ganancia < 5000.0,
-            "La ganancia debe estar acotada por el deslizamiento"
-        );
-
-        // Comprobar que el tamaño del swap óptimo convergió cerca de 950.0 USDC
+        assert!(profit < 5000.0, "Profit should be bounded by pool slippage");
         assert!((dy - 950.92).abs() < 50.0);
     } else {
-        panic!("Se esperaba solución elástica de tipo Pista");
+        panic!("Expected elastic Hint solution");
     }
 }
 
 #[test]
-fn test_arbitraje_triangular_multi_hop() {
-    let mut sistema = SistemaRestricciones::new();
+fn test_triangular_arbitrage_multi_hop() {
+    let mut system = ConstraintSystem::new();
 
     // Pool 1: SOL/USDC (USDC -> SOL) - 1,000 SOL / 150,000 USDC
-    let x1 = sistema.agregar_variable("X1", 1000.0, 0.0);
-    let y1 = sistema.agregar_variable("Y1", 150000.0, 0.0);
-    let k1 = sistema.agregar_variable("K1", 150000000.0, 0.0);
+    let x1 = system.add_variable("X1", 1000.0, 0.0);
+    let y1 = system.add_variable("Y1", 150000.0, 0.0);
+    let k1 = system.add_variable("K1", 150000000.0, 0.0);
 
     // Pool 2: SOL/BONK (SOL -> BONK) - 1,000 SOL / 10,000,000 BONK
-    let x2 = sistema.agregar_variable("X2", 1000.0, 0.0);
-    let z2 = sistema.agregar_variable("Z2", 10000000.0, 0.0);
-    let k2 = sistema.agregar_variable("K2", 10000000000.0, 0.0);
+    let x2 = system.add_variable("X2", 1000.0, 0.0);
+    let z2 = system.add_variable("Z2", 10000000.0, 0.0);
+    let k2 = system.add_variable("K2", 10000000000.0, 0.0);
 
     // Pool 3: BONK/USDC (BONK -> USDC) - 10,000,000 BONK / 160,000 USDC
-    let z3 = sistema.agregar_variable("Z3", 10000000.0, 0.0);
-    let y3 = sistema.agregar_variable("Y3", 160000.0, 0.0);
-    let k3 = sistema.agregar_variable("K3", 1600000000000.0, 0.0);
+    let z3 = system.add_variable("Z3", 10000000.0, 0.0);
+    let y3 = system.add_variable("Y3", 160000.0, 0.0);
+    let k3 = system.add_variable("K3", 1600000000000.0, 0.0);
 
-    // Variables de swap
-    let delta_y_in = sistema.agregar_variable("DeltaY_In", 1000.0, 1.0);
-    let delta_x1 = sistema.agregar_variable("DeltaX1", 6.0, 1.0);
-    let delta_z2 = sistema.agregar_variable("DeltaZ2", 60000.0, 1.0);
-    let delta_y_out = sistema.agregar_variable("DeltaY_Out", 1000.0, 1.0);
+    // Swap variables
+    let delta_y_in = system.add_variable("DeltaY_In", 1000.0, 1.0);
+    let delta_x1 = system.add_variable("DeltaX1", 6.0, 1.0);
+    let delta_z2 = system.add_variable("DeltaZ2", 60000.0, 1.0);
+    let delta_y_out = system.add_variable("DeltaY_Out", 1000.0, 1.0);
 
     // Post-reserves
-    let x1_post = sistema.agregar_variable("X1_Post", 994.0, 1.0);
-    let y1_post = sistema.agregar_variable("Y1_Post", 151000.0, 1.0);
+    let x1_post = system.add_variable("X1_Post", 994.0, 1.0);
+    let y1_post = system.add_variable("Y1_Post", 151000.0, 1.0);
 
-    let x2_post = sistema.agregar_variable("X2_Post", 1006.0, 1.0);
-    let z2_post = sistema.agregar_variable("Z2_Post", 9940000.0, 1.0);
+    let x2_post = system.add_variable("X2_Post", 1006.0, 1.0);
+    let z2_post = system.add_variable("Z2_Post", 9940000.0, 1.0);
 
-    let z3_post = sistema.agregar_variable("Z3_Post", 10060000.0, 1.0);
-    let y3_post = sistema.agregar_variable("Y3_Post", 159000.0, 1.0);
+    let z3_post = system.add_variable("Z3_Post", 10060000.0, 1.0);
+    let y3_post = system.add_variable("Y3_Post", 159000.0, 1.0);
 
-    // Restricciones de Pool 1
-    sistema.agregar_restriccion(Restriccion::IgualdadSuma {
-        nombre: "p1_suma_y".to_string(),
-        sumandos: vec![y1, delta_y_in],
-        resultado: y1_post,
+    // Constraints Pool 1
+    system.add_constraint(Constraint::SumEquality {
+        name: "p1_sum_y".to_string(),
+        sumands: vec![y1, delta_y_in],
+        result: y1_post,
     });
-    sistema.agregar_restriccion(Restriccion::IgualdadSuma {
-        nombre: "p1_resta_x".to_string(),
-        sumandos: vec![x1_post, delta_x1],
-        resultado: x1,
+    system.add_constraint(Constraint::SumEquality {
+        name: "p1_sub_x".to_string(),
+        sumands: vec![x1_post, delta_x1],
+        result: x1,
     });
-    sistema.agregar_restriccion(Restriccion::IgualdadProducto {
-        nombre: "p1_amm".to_string(),
-        factores: vec![x1_post, y1_post],
-        resultado: k1,
-    });
-
-    // Restricciones de Pool 2
-    sistema.agregar_restriccion(Restriccion::IgualdadSuma {
-        nombre: "p2_suma_x".to_string(),
-        sumandos: vec![x2, delta_x1],
-        resultado: x2_post,
-    });
-    sistema.agregar_restriccion(Restriccion::IgualdadSuma {
-        nombre: "p2_resta_z".to_string(),
-        sumandos: vec![z2_post, delta_z2],
-        resultado: z2,
-    });
-    sistema.agregar_restriccion(Restriccion::IgualdadProducto {
-        nombre: "p2_amm".to_string(),
-        factores: vec![x2_post, z2_post],
-        resultado: k2,
+    system.add_constraint(Constraint::ProductEquality {
+        name: "p1_amm".to_string(),
+        factors: vec![x1_post, y1_post],
+        result: k1,
     });
 
-    // Restricciones de Pool 3
-    sistema.agregar_restriccion(Restriccion::IgualdadSuma {
-        nombre: "p3_suma_z".to_string(),
-        sumandos: vec![z3, delta_z2],
-        resultado: z3_post,
+    // Constraints Pool 2
+    system.add_constraint(Constraint::SumEquality {
+        name: "p2_sum_x".to_string(),
+        sumands: vec![x2, delta_x1],
+        result: x2_post,
     });
-    sistema.agregar_restriccion(Restriccion::IgualdadSuma {
-        nombre: "p3_resta_y".to_string(),
-        sumandos: vec![y3_post, delta_y_out],
-        resultado: y3,
+    system.add_constraint(Constraint::SumEquality {
+        name: "p2_sub_z".to_string(),
+        sumands: vec![z2_post, delta_z2],
+        result: z2,
     });
-    sistema.agregar_restriccion(Restriccion::IgualdadProducto {
-        nombre: "p3_amm".to_string(),
-        factores: vec![z3_post, y3_post],
-        resultado: k3,
+    system.add_constraint(Constraint::ProductEquality {
+        name: "p2_amm".to_string(),
+        factors: vec![x2_post, z2_post],
+        result: k2,
     });
 
-    // Atractor de ganancia
-    let objetivo_ganancia = sistema.agregar_variable("Objetivo_Ganancia", 50000.0, 0.0);
-    let delta_y_mas_objetivo = sistema.agregar_variable("DeltaY_Mas_Objetivo", 51000.0, 1.0);
-
-    sistema.agregar_restriccion(Restriccion::IgualdadSuma {
-        nombre: "suma_objetivo".to_string(),
-        sumandos: vec![delta_y_in, objetivo_ganancia],
-        resultado: delta_y_mas_objetivo,
+    // Constraints Pool 3
+    system.add_constraint(Constraint::SumEquality {
+        name: "p3_sum_z".to_string(),
+        sumands: vec![z3, delta_z2],
+        result: z3_post,
     });
-    sistema.agregar_restriccion(Restriccion::IgualdadDirecta {
-        nombre: "atraccion_ganancia".to_string(),
+    system.add_constraint(Constraint::SumEquality {
+        name: "p3_sub_y".to_string(),
+        sumands: vec![y3_post, delta_y_out],
+        result: y3,
+    });
+    system.add_constraint(Constraint::ProductEquality {
+        name: "p3_amm".to_string(),
+        factors: vec![z3_post, y3_post],
+        result: k3,
+    });
+
+    // Attractor
+    let profit_target = system.add_variable("Profit_Target", 50000.0, 0.0);
+    let delta_y_plus_target = system.add_variable("DeltaY_Plus_Target", 51000.0, 1.0);
+
+    system.add_constraint(Constraint::SumEquality {
+        name: "sum_target".to_string(),
+        sumands: vec![delta_y_in, profit_target],
+        result: delta_y_plus_target,
+    });
+    system.add_constraint(Constraint::DirectEquality {
+        name: "profit_attractor".to_string(),
         var_a: delta_y_out,
-        var_b: delta_y_mas_objetivo,
+        var_b: delta_y_plus_target,
     });
 
-    sistema.precalcular_adyacencias();
+    system.precompute_adjacencies();
 
-    let motor = MotorSpeculam::new();
-    let solucion = motor.evaluar(&sistema);
+    let engine = SpeculamEngine::new();
+    let solution = engine.evaluate(&system);
 
-    if let SolucionEspejo::Pista {
-        valores_ajustados, ..
-    } = solucion
+    if let SpeculamSolution::Hint {
+        adjusted_values, ..
+    } = solution
     {
-        let dy_in = valores_ajustados.get("DeltaY_In").unwrap();
-        let dy_out = valores_ajustados.get("DeltaY_Out").unwrap();
-        let ganancia = dy_out - dy_in;
+        let dy_in = adjusted_values.get("DeltaY_In").unwrap();
+        let dy_out = adjusted_values.get("DeltaY_Out").unwrap();
+        let profit = dy_out - dy_in;
 
-        // Comprobar que el arbitraje triangular da ganancia positiva
         assert!(
-            ganancia > 10.0,
-            "La ganancia triangular debería ser positiva (> 10 USDC)"
+            profit > 10.0,
+            "Triangular profit should be positive (> 10 USDC)"
         );
-        assert!(ganancia < 5000.0);
+        assert!(profit < 5000.0);
     } else {
-        panic!("Se esperaba solución elástica de tipo Pista para arbitraje triangular");
+        panic!("Expected Hint solution for triangular arbitrage");
     }
 }

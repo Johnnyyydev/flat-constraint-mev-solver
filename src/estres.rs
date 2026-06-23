@@ -1,58 +1,53 @@
-use crate::grafo::{Restriccion, SistemaRestricciones};
+use crate::grafo::{Constraint, ConstraintSystem};
 use rayon::prelude::*;
 
-/// Contiene el estado del campo de estrés en un instante dado usando arrays contiguos sin alocación.
+/// Represents the global stress field state at a given instant using zero-allocation flat arrays.
 #[derive(Debug, Clone)]
-pub struct CampoEstres {
-    /// Energía elástica total almacenada en el sistema (suma de tensiones al cuadrado).
-    pub energia_total: f64,
-    /// Vector plano de tensiones alineado con los índices de `sistema.restricciones`.
-    /// Al usar Vec<f64> en lugar de HashMap<String, f64>, eliminamos el 100% de las alocaciones
-    /// de memoria en el hot path, desbloqueando el verdadero rendimiento SIMD y Rayon.
-    pub tensiones: Vec<f64>,
-    /// Gradiente de energía respecto a cada variable indexada directamente por su posición.
-    pub gradiente: Vec<f64>,
+pub struct StressField {
+    /// Total elastic potential energy stored in the system (sum of squared tensions).
+    pub total_energy: f64,
+    /// Flat vector of tensions aligned with the indices of `system.constraints`.
+    /// Eliminates heap allocations in the hot path, enabling SIMD and Rayon parallelization.
+    pub tensions: Vec<f64>,
+    /// Energy gradient with respect to each variable index.
+    pub gradient: Vec<f64>,
 }
 
-impl CampoEstres {
-    /// Calcula el campo de estrés actual del sistema de restricciones plano libre de alocaciones.
+impl StressField {
+    /// Calculates the current stress field of the constraint system.
     ///
-    /// Este método evalúa la energía total, las desviaciones/tensiones locales de cada restricción
-    /// y el gradiente de energía local en paralelo usando Rayon.
-    pub fn calcular(sistema: &SistemaRestricciones) -> Self {
-        // Pasada 1: Calcular la tensión de cada restricción en paralelo con Rayon (sin alocar Strings)
-        let tensiones: Vec<f64> = sistema
-            .restricciones
+    /// This method evaluates the total energy, local tensions of each constraint,
+    /// and the local gradient vector in parallel using Rayon.
+    pub fn calculate(system: &ConstraintSystem) -> Self {
+        // Pass 1: Calculate local tensions for each constraint in parallel
+        let tensions: Vec<f64> = system
+            .constraints
             .par_iter()
-            .map(|restriccion| match restriccion {
-                Restriccion::IgualdadSuma {
-                    sumandos,
-                    resultado,
-                    ..
+            .map(|constraint| match constraint {
+                Constraint::SumEquality {
+                    sumands, result, ..
                 } => {
-                    let mut suma = 0.0;
-                    for &idx in sumandos {
-                        suma += sistema.valores[idx];
+                    let mut sum = 0.0;
+                    for &idx in sumands {
+                        sum += system.values[idx];
                     }
-                    let res = sistema.valores[*resultado];
-                    suma - res
+                    let res = system.values[*result];
+                    sum - res
                 }
-                Restriccion::IgualdadProducto {
-                    factores,
-                    resultado,
-                    ..
+                Constraint::ProductEquality {
+                    factors, result, ..
                 } => {
                     let mut prod = 1.0;
-                    for &idx in factores {
-                        prod *= sistema.valores[idx];
+                    for &idx in factors {
+                        prod *= system.values[idx];
                     }
-                    let res = sistema.valores[*resultado];
+                    let res = system.values[*result];
                     prod - res
                 }
-                Restriccion::Rango {
+                Constraint::Range {
                     variable, min, max, ..
                 } => {
-                    let val = sistema.valores[*variable];
+                    let val = system.values[*variable];
                     if val < *min {
                         val - *min
                     } else if val > *max {
@@ -61,31 +56,31 @@ impl CampoEstres {
                         0.0
                     }
                 }
-                Restriccion::IgualdadDirecta { var_a, var_b, .. } => {
-                    let val_a = sistema.valores[*var_a];
-                    let val_b = sistema.valores[*var_b];
+                Constraint::DirectEquality { var_a, var_b, .. } => {
+                    let val_a = system.values[*var_a];
+                    let val_b = system.values[*var_b];
                     val_a - val_b
                 }
             })
             .collect();
 
-        // Calcular la energía total elástica en paralelo usando sumatorio
-        let energia_total = tensiones.par_iter().map(|&t| t * t).sum();
+        // Calculate total elastic energy in parallel
+        let total_energy = tensions.par_iter().map(|&t| t * t).sum();
 
-        // Pasada 2: Calcular el gradiente de energía para cada variable de forma paralela (modelo GATHER)
-        let gradiente: Vec<f64> = (0..sistema.valores.len())
+        // Pass 2: Calculate the energy gradient for each variable (GATHER model)
+        let gradient: Vec<f64> = (0..system.values.len())
             .into_par_iter()
             .map(|var_idx| {
-                if sistema.es_fija(var_idx) {
+                if system.is_fixed(var_idx) {
                     return 0.0;
                 }
 
                 let mut grad_i = 0.0;
-                if let Some(rest_indices) = sistema.variables_a_restricciones.get(var_idx) {
+                if let Some(rest_indices) = system.variables_to_constraints.get(var_idx) {
                     for &r_idx in rest_indices {
-                        let tension = tensiones[r_idx];
-                        let rest = &sistema.restricciones[r_idx];
-                        let deriv = rest.derivada_parcial(var_idx, &sistema.valores);
+                        let tension = tensions[r_idx];
+                        let rest = &system.constraints[r_idx];
+                        let deriv = rest.partial_derivative(var_idx, &system.values);
                         grad_i += 2.0 * tension * deriv;
                     }
                 }
@@ -93,10 +88,10 @@ impl CampoEstres {
             })
             .collect();
 
-        CampoEstres {
-            energia_total,
-            tensiones,
-            gradiente,
+        StressField {
+            total_energy,
+            tensions,
+            gradient,
         }
     }
 }

@@ -13,10 +13,10 @@ pub mod grafo;
 pub mod network_bridge;
 pub mod quantum_jump;
 
-// Re-exportar elementos clave para facilitar el uso
+// Re-export key elements for ease of use
 pub use autogenesis::Autogenesis;
-pub use espejo::{MotorSpeculam, SolucionEspejo};
-pub use estres::CampoEstres;
-pub use grafo::{Restriccion, SistemaRestricciones};
+pub use espejo::{SpeculamEngine, SpeculamSolution};
+pub use estres::StressField;
+pub use grafo::{Constraint, ConstraintSystem};
 pub use network_bridge::NetworkBridge;
 pub use quantum_jump::QuantumJumper;

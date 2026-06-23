@@ -1,100 +1,100 @@
-use speculam_solver::{MotorSpeculam, Restriccion, SistemaRestricciones, SolucionEspejo};
+use speculam_solver::{Constraint, ConstraintSystem, SpeculamEngine, SpeculamSolution};
 
 fn main() {
-    println!("=== S.P.E.C.U.L.A.M. Ejemplo: Arbitraje Simple ===");
+    println!("=== S.P.E.C.U.L.A.M. Example: Simple Arbitrage ===");
 
-    let mut sistema = SistemaRestricciones::new();
+    let mut system = ConstraintSystem::new();
 
-    // Pool A (Comprar SOL barato)
-    // Reservas iniciales: X (SOL) = 1,000.0, Y (USDC) = 150,000.0
-    let x_a = sistema.agregar_variable("X_A", 1000.0, 0.0);
-    let y_a = sistema.agregar_variable("Y_A", 150000.0, 0.0);
-    let k_a = sistema.agregar_variable("K_A", 150000000.0, 0.0);
+    // Pool A (Buy SOL cheap)
+    // Initial reserves: X (SOL) = 1,000.0, Y (USDC) = 150,000.0
+    let x_a = system.add_variable("X_A", 1000.0, 0.0);
+    let y_a = system.add_variable("Y_A", 150000.0, 0.0);
+    let k_a = system.add_variable("K_A", 150000000.0, 0.0);
 
-    // Pool B (Vender SOL caro)
-    // Reservas iniciales: X (SOL) = 1,000.0, Y (USDC) = 160,000.0
-    let x_b = sistema.agregar_variable("X_B", 1000.0, 0.0);
-    let y_b = sistema.agregar_variable("Y_B", 160000.0, 0.0);
-    let k_b = sistema.agregar_variable("K_B", 160000000.0, 0.0);
+    // Pool B (Sell SOL expensive)
+    // Initial reserves: X (SOL) = 1,000.0, Y (USDC) = 160,000.0
+    let x_b = system.add_variable("X_B", 1000.0, 0.0);
+    let y_b = system.add_variable("Y_B", 160000.0, 0.0);
+    let k_b = system.add_variable("K_B", 160000000.0, 0.0);
 
-    // Variables de swap (flujo de tokens)
-    let delta_y = sistema.agregar_variable("DeltaY", 1000.0, 1.0);
-    let delta_x = sistema.agregar_variable("DeltaX", 6.0, 1.0);
-    let delta_y_out = sistema.agregar_variable("DeltaY_Out", 1000.0, 1.0);
+    // Swap variables (token flows)
+    let delta_y = system.add_variable("DeltaY", 1000.0, 1.0);
+    let delta_x = system.add_variable("DeltaX", 6.0, 1.0);
+    let delta_y_out = system.add_variable("DeltaY_Out", 1000.0, 1.0);
 
-    // Estados intermedios tras el swap
-    let x_a_post = sistema.agregar_variable("X_A_Post", 994.0, 1.0);
-    let y_a_post = sistema.agregar_variable("Y_A_Post", 151000.0, 1.0);
+    // Intermediate post-trade states
+    let x_a_post = system.add_variable("X_A_Post", 994.0, 1.0);
+    let y_a_post = system.add_variable("Y_A_Post", 151000.0, 1.0);
 
-    let x_b_post = sistema.agregar_variable("X_B_Post", 1006.0, 1.0);
-    let y_b_post = sistema.agregar_variable("Y_B_Post", 159000.0, 1.0);
+    let x_b_post = system.add_variable("X_B_Post", 1006.0, 1.0);
+    let y_b_post = system.add_variable("Y_B_Post", 159000.0, 1.0);
 
-    // Restricciones físicas de Pool A (USDC -> SOL)
-    sistema.agregar_restriccion(Restriccion::IgualdadSuma {
-        nombre: "pool_a_y".to_string(),
-        sumandos: vec![y_a, delta_y],
-        resultado: y_a_post,
+    // Pool A physical constraints (USDC -> SOL)
+    system.add_constraint(Constraint::SumEquality {
+        name: "pool_a_y".to_string(),
+        sumands: vec![y_a, delta_y],
+        result: y_a_post,
     });
-    sistema.agregar_restriccion(Restriccion::IgualdadSuma {
-        nombre: "pool_a_x".to_string(),
-        sumandos: vec![x_a_post, delta_x],
-        resultado: x_a,
+    system.add_constraint(Constraint::SumEquality {
+        name: "pool_a_x".to_string(),
+        sumands: vec![x_a_post, delta_x],
+        result: x_a,
     });
-    sistema.agregar_restriccion(Restriccion::IgualdadProducto {
-        nombre: "pool_a_amm".to_string(),
-        factores: vec![x_a_post, y_a_post],
-        resultado: k_a,
-    });
-
-    // Restricciones físicas de Pool B (SOL -> USDC)
-    sistema.agregar_restriccion(Restriccion::IgualdadSuma {
-        nombre: "pool_b_x".to_string(),
-        sumandos: vec![x_b, delta_x],
-        resultado: x_b_post,
-    });
-    sistema.agregar_restriccion(Restriccion::IgualdadSuma {
-        nombre: "pool_b_y".to_string(),
-        sumandos: vec![y_b_post, delta_y_out],
-        resultado: y_b,
-    });
-    sistema.agregar_restriccion(Restriccion::IgualdadProducto {
-        nombre: "pool_b_amm".to_string(),
-        factores: vec![x_b_post, y_b_post],
-        resultado: k_b,
+    system.add_constraint(Constraint::ProductEquality {
+        name: "pool_a_amm".to_string(),
+        factors: vec![x_a_post, y_a_post],
+        result: k_a,
     });
 
-    // Objetivo: maximizar ganancia elástica
-    let objetivo_ganancia = sistema.agregar_variable("Objetivo_Ganancia", 50000.0, 0.0);
-    let delta_y_mas_objetivo = sistema.agregar_variable("DeltaY_Mas_Objetivo", 51000.0, 1.0);
-
-    sistema.agregar_restriccion(Restriccion::IgualdadSuma {
-        nombre: "suma_objetivo".to_string(),
-        sumandos: vec![delta_y, objetivo_ganancia],
-        resultado: delta_y_mas_objetivo,
+    // Pool B physical constraints (SOL -> USDC)
+    system.add_constraint(Constraint::SumEquality {
+        name: "pool_b_x".to_string(),
+        sumands: vec![x_b, delta_x],
+        result: x_b_post,
+    });
+    system.add_constraint(Constraint::SumEquality {
+        name: "pool_b_y".to_string(),
+        sumands: vec![y_b_post, delta_y_out],
+        result: y_b,
+    });
+    system.add_constraint(Constraint::ProductEquality {
+        name: "pool_b_amm".to_string(),
+        factors: vec![x_b_post, y_b_post],
+        result: k_b,
     });
 
-    sistema.agregar_restriccion(Restriccion::IgualdadDirecta {
-        nombre: "atraccion_ganancia".to_string(),
+    // Target: maximize elastic profit
+    let profit_target = system.add_variable("Profit_Target", 50000.0, 0.0);
+    let delta_y_plus_target = system.add_variable("DeltaY_Plus_Target", 51000.0, 1.0);
+
+    system.add_constraint(Constraint::SumEquality {
+        name: "sum_target".to_string(),
+        sumands: vec![delta_y, profit_target],
+        result: delta_y_plus_target,
+    });
+
+    system.add_constraint(Constraint::DirectEquality {
+        name: "profit_attractor".to_string(),
         var_a: delta_y_out,
-        var_b: delta_y_mas_objetivo,
+        var_b: delta_y_plus_target,
     });
 
-    sistema.precalcular_adyacencias();
+    system.precompute_adjacencies();
 
-    let motor = MotorSpeculam::new();
-    let solucion = motor.evaluar(&sistema);
+    let engine = SpeculamEngine::new();
+    let solution = engine.evaluate(&system);
 
-    match solucion {
-        SolucionEspejo::Pista {
-            valores_ajustados, ..
+    match solution {
+        SpeculamSolution::Hint {
+            adjusted_values, ..
         } => {
-            let dy = valores_ajustados.get("DeltaY").unwrap();
-            let dy_out = valores_ajustados.get("DeltaY_Out").unwrap();
-            println!("¡Arbitraje resuelto con éxito!");
-            println!("USDC Inyectado: {:.2} USDC", dy);
-            println!("USDC Obtenido: {:.2} USDC", dy_out);
-            println!("Ganancia Neta: {:.2} USDC", dy_out - dy);
+            let dy = adjusted_values.get("DeltaY").unwrap();
+            let dy_out = adjusted_values.get("DeltaY_Out").unwrap();
+            println!("Arbitrage resolved successfully!");
+            println!("USDC Injected: {:.2} USDC", dy);
+            println!("USDC Obtained: {:.2} USDC", dy_out);
+            println!("Net Profit: {:.2} USDC", dy_out - dy);
         }
-        _ => println!("Error al optimizar el arbitraje."),
+        _ => println!("Error optimizing arbitrage."),
     }
 }

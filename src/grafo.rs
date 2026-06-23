@@ -1,113 +1,109 @@
 use std::collections::HashMap;
 
-/// Representa las restricciones lógicas y matemáticas que gobiernan el sistema plano.
-/// Las restricciones usan índices `usize` en lugar de cadenas de texto para evitar búsquedas lentas en mapas hash.
+/// Represents the logical and mathematical constraints governing the flat system.
+/// Constraints use `usize` indices instead of string names to avoid slow lookups in hash maps.
 #[derive(Debug, Clone)]
-pub enum Restriccion {
-    /// Suma ponderada: sumandos[0] + sumandos[1] + ... = resultado
-    IgualdadSuma {
-        /// Nombre identificador de la restricción.
-        nombre: String,
-        /// Índices de las variables que se suman.
-        sumandos: Vec<usize>,
-        /// Índice de la variable que representa el resultado de la suma.
-        resultado: usize,
+pub enum Constraint {
+    /// Weighted sum: sumands[0] + sumands[1] + ... = result
+    SumEquality {
+        /// Identifier name of the constraint.
+        name: String,
+        /// Indices of the variables to sum.
+        sumands: Vec<usize>,
+        /// Index of the variable representing the sum result.
+        result: usize,
     },
-    /// Producto constante (curvas de AMM): factores[0] * factores[1] * ... = resultado
-    IgualdadProducto {
-        /// Nombre identificador de la restricción.
-        nombre: String,
-        /// Índices de las variables que se multiplican.
-        factores: Vec<usize>,
-        /// Índice de la variable que representa el resultado del producto.
-        resultado: usize,
+    /// Constant product (AMM curves): factors[0] * factors[1] * ... = result
+    ProductEquality {
+        /// Identifier name of the constraint.
+        name: String,
+        /// Indices of the variables to multiply.
+        factors: Vec<usize>,
+        /// Index of the variable representing the product result.
+        result: usize,
     },
-    /// Rango límite: variable en rango [min, max]
-    Rango {
-        /// Nombre identificador de la restricción.
-        nombre: String,
-        /// Índice de la variable a la que se le aplica el rango.
+    /// Boundary limit: variable in range [min, max]
+    Range {
+        /// Identifier name of the constraint.
+        name: String,
+        /// Index of the variable constrained.
         variable: usize,
-        /// Valor mínimo permitido.
+        /// Minimum allowed value.
         min: f64,
-        /// Valor máximo permitido.
+        /// Maximum allowed value.
         max: f64,
     },
-    /// Igualdad de variables: var_a = var_b
-    IgualdadDirecta {
-        /// Nombre identificador de la restricción.
-        nombre: String,
-        /// Índice de la primera variable.
+    /// Direct equivalence: var_a = var_b
+    DirectEquality {
+        /// Identifier name of the constraint.
+        name: String,
+        /// Index of the first variable.
         var_a: usize,
-        /// Índice de la segunda variable.
+        /// Index of the second variable.
         var_b: usize,
     },
 }
 
-impl Restriccion {
-    /// Devuelve el nombre identificador de la restricción.
-    pub fn nombre(&self) -> &str {
+impl Constraint {
+    /// Returns the identifier name of the constraint.
+    pub fn name(&self) -> &str {
         match self {
-            Restriccion::IgualdadSuma { nombre, .. } => nombre,
-            Restriccion::IgualdadProducto { nombre, .. } => nombre,
-            Restriccion::Rango { nombre, .. } => nombre,
-            Restriccion::IgualdadDirecta { nombre, .. } => nombre,
+            Constraint::SumEquality { name, .. } => name,
+            Constraint::ProductEquality { name, .. } => name,
+            Constraint::Range { name, .. } => name,
+            Constraint::DirectEquality { name, .. } => name,
         }
     }
 
-    /// Calcula la derivada parcial de la tensión de la restricción con respecto a la variable `var_idx`.
-    /// Este método encapsula el comportamiento local de derivadas para la paralelización lock-free.
-    pub fn derivada_parcial(&self, var_idx: usize, valores: &[f64]) -> f64 {
+    /// Calculates the partial derivative of the constraint stress with respect to variable `var_idx`.
+    /// This method encapsulates local derivative behavior for lock-free parallelization.
+    pub fn partial_derivative(&self, var_idx: usize, values: &[f64]) -> f64 {
         match self {
-            Restriccion::IgualdadSuma {
-                sumandos,
-                resultado,
-                ..
+            Constraint::SumEquality {
+                sumands, result, ..
             } => {
                 let mut d = 0.0;
-                for &s in sumandos {
+                for &s in sumands {
                     if s == var_idx {
                         d += 1.0;
                     }
                 }
-                if *resultado == var_idx {
+                if *result == var_idx {
                     d -= 1.0;
                 }
                 d
             }
-            Restriccion::IgualdadProducto {
-                factores,
-                resultado,
-                ..
+            Constraint::ProductEquality {
+                factors, result, ..
             } => {
                 let mut d = 0.0;
-                for (i, &f) in factores.iter().enumerate() {
+                for (i, &f) in factors.iter().enumerate() {
                     if f == var_idx {
                         let mut prod = 1.0;
-                        for (k, &other_f) in factores.iter().enumerate() {
+                        for (k, &other_f) in factors.iter().enumerate() {
                             if i != k {
-                                prod *= valores[other_f];
+                                prod *= values[other_f];
                             }
                         }
                         d += prod;
                     }
                 }
-                if *resultado == var_idx {
+                if *result == var_idx {
                     d -= 1.0;
                 }
                 d
             }
-            Restriccion::Rango {
+            Constraint::Range {
                 variable, min, max, ..
             } => {
                 if *variable == var_idx {
-                    let val = valores[*variable];
+                    let val = values[*variable];
                     if val < *min || val > *max { 1.0 } else { 0.0 }
                 } else {
                     0.0
                 }
             }
-            Restriccion::IgualdadDirecta { var_a, var_b, .. } => {
+            Constraint::DirectEquality { var_a, var_b, .. } => {
                 let mut d = 0.0;
                 if *var_a == var_idx {
                     d += 1.0;
@@ -121,145 +117,141 @@ impl Restriccion {
     }
 }
 
-/// Sistema de restricciones matricial y plano.
-/// Toda la información está almacenada en arrays contiguos en memoria,
-/// listos para ser recorridos secuencialmente y permitir auto-vectorización (SIMD).
+/// Flat and contiguous matrix constraint system.
+/// All information is stored in contiguous arrays in memory,
+/// ready to be traversed sequentially to allow auto-vectorization (SIMD).
 #[derive(Debug, Clone, Default)]
-pub struct SistemaRestricciones {
-    /// Nombres de todas las variables indexadas.
-    pub nombres: Vec<String>,
-    /// Valores numéricos de las variables en tiempo real.
-    pub valores: Vec<f64>,
-    /// Coeficientes de elasticidad (0.0 indica que es rígida / fija).
-    pub elasticidades: Vec<f64>,
-    /// Mapeo auxiliar de nombre -> índice. Se utiliza SOLO durante la construcción
-    /// o inserción del grafo, nunca durante el bucle de optimización interno.
+pub struct ConstraintSystem {
+    /// Names of all indexed variables.
+    pub names: Vec<String>,
+    /// Real-time numerical values of the variables.
+    pub values: Vec<f64>,
+    /// Elasticity coefficients (0.0 indicates rigid / fixed).
+    pub elasticities: Vec<f64>,
+    /// Auxiliary mapping of name -> index. Used ONLY during construction,
+    /// never during the inner optimization loop.
     pub variable_indices: HashMap<String, usize>,
-    /// Lista de todas las restricciones que gobiernan el sistema.
-    pub restricciones: Vec<Restriccion>,
-    /// Mapeo de adyacencia: para cada índice de variable, la lista de índices de restricciones que la referencian.
-    /// Esto es crítico para la paralización gather multihilo.
-    pub variables_a_restricciones: Vec<Vec<usize>>,
+    /// List of all constraints governing the system.
+    pub constraints: Vec<Constraint>,
+    /// Adjacency mapping: for each variable index, the list of constraint indices referencing it.
+    /// Critical for lock-free parallel gather operations.
+    pub variables_to_constraints: Vec<Vec<usize>>,
 }
 
-impl SistemaRestricciones {
-    /// Crea una nueva instancia vacía de `SistemaRestricciones`.
+impl ConstraintSystem {
+    /// Creates a new empty instance of `ConstraintSystem`.
     pub fn new() -> Self {
-        SistemaRestricciones {
-            nombres: Vec::new(),
-            valores: Vec::new(),
-            elasticidades: Vec::new(),
+        ConstraintSystem {
+            names: Vec::new(),
+            values: Vec::new(),
+            elasticities: Vec::new(),
             variable_indices: HashMap::new(),
-            restricciones: Vec::new(),
-            variables_a_restricciones: Vec::new(),
+            constraints: Vec::new(),
+            variables_to_constraints: Vec::new(),
         }
     }
 
-    /// Agrega una variable al sistema plano y devuelve su índice único.
-    /// Si la variable ya existe, actualiza sus propiedades.
-    pub fn agregar_variable(&mut self, nombre: &str, valor: f64, elasticidad: f64) -> usize {
-        let elasticidad_val = elasticidad.max(0.0);
-        if let Some(&idx) = self.variable_indices.get(nombre) {
-            self.valores[idx] = valor;
-            self.elasticidades[idx] = elasticidad_val;
+    /// Adds a variable to the flat system and returns its unique index.
+    /// If the variable already exists, updates its properties.
+    pub fn add_variable(&mut self, name: &str, value: f64, elasticity: f64) -> usize {
+        let elasticity_val = elasticity.max(0.0);
+        if let Some(&idx) = self.variable_indices.get(name) {
+            self.values[idx] = value;
+            self.elasticities[idx] = elasticity_val;
             idx
         } else {
-            let idx = self.valores.len();
-            self.nombres.push(nombre.to_string());
-            self.valores.push(valor);
-            self.elasticidades.push(elasticidad_val);
-            self.variable_indices.insert(nombre.to_string(), idx);
+            let idx = self.values.len();
+            self.names.push(name.to_string());
+            self.values.push(value);
+            self.elasticities.push(elasticity_val);
+            self.variable_indices.insert(name.to_string(), idx);
             idx
         }
     }
 
-    /// Obtiene el índice de una variable. Si no existe, la crea con valores por defecto.
-    pub fn obtener_o_crear_variable(&mut self, nombre: &str) -> usize {
-        if let Some(&idx) = self.variable_indices.get(nombre) {
+    /// Gets the index of a variable. If it does not exist, creates it with default values.
+    pub fn get_or_create_variable(&mut self, name: &str) -> usize {
+        if let Some(&idx) = self.variable_indices.get(name) {
             idx
         } else {
-            self.agregar_variable(nombre, 0.0, 1.0)
+            self.add_variable(name, 0.0, 1.0)
         }
     }
 
-    /// Agrega una restricción al grafo plano.
-    pub fn agregar_restriccion(&mut self, restriccion: Restriccion) {
-        self.restricciones.push(restriccion);
+    /// Adds a constraint to the flat graph.
+    pub fn add_constraint(&mut self, constraint: Constraint) {
+        self.constraints.push(constraint);
     }
 
-    /// Precalcula el mapeo de adyacencia de variables a restricciones.
-    /// Debe ser llamado después de agregar todas las variables y restricciones
-    /// y antes de arrancar el bucle del resolvedor.
-    pub fn precalcular_adyacencias(&mut self) {
-        let num_vars = self.valores.len();
+    /// Precomputes the adjacency mapping of variables to constraints.
+    /// Must be called after adding all variables and constraints,
+    /// and before running the solver loop.
+    pub fn precompute_adjacencies(&mut self) {
+        let num_vars = self.values.len();
         let mut mapping = vec![Vec::new(); num_vars];
 
-        for (r_idx, rest) in self.restricciones.iter().enumerate() {
+        for (r_idx, rest) in self.constraints.iter().enumerate() {
             match rest {
-                Restriccion::IgualdadSuma {
-                    sumandos,
-                    resultado,
-                    ..
+                Constraint::SumEquality {
+                    sumands, result, ..
                 } => {
-                    for &s in sumandos {
+                    for &s in sumands {
                         mapping[s].push(r_idx);
                     }
-                    mapping[*resultado].push(r_idx);
+                    mapping[*result].push(r_idx);
                 }
-                Restriccion::IgualdadProducto {
-                    factores,
-                    resultado,
-                    ..
+                Constraint::ProductEquality {
+                    factors, result, ..
                 } => {
-                    for &f in factores {
+                    for &f in factors {
                         mapping[f].push(r_idx);
                     }
-                    mapping[*resultado].push(r_idx);
+                    mapping[*result].push(r_idx);
                 }
-                Restriccion::Rango { variable, .. } => {
+                Constraint::Range { variable, .. } => {
                     mapping[*variable].push(r_idx);
                 }
-                Restriccion::IgualdadDirecta { var_a, var_b, .. } => {
+                Constraint::DirectEquality { var_a, var_b, .. } => {
                     mapping[*var_a].push(r_idx);
                     mapping[*var_b].push(r_idx);
                 }
             }
         }
 
-        // Eliminar duplicados para evitar cálculos redundantes si una variable
-        // aparece múltiples veces en la misma restricción
+        // Remove duplicates to avoid redundant calculations if a variable
+        // appears multiple times in the same constraint
         for list in &mut mapping {
             list.sort_unstable();
             list.dedup();
         }
 
-        self.variables_a_restricciones = mapping;
+        self.variables_to_constraints = mapping;
     }
 
-    /// Obtiene el valor actual de una variable por su índice de manera directa.
+    /// Gets the current value of a variable directly by its index.
     #[inline(always)]
-    pub fn obtener_valor(&self, idx: usize) -> f64 {
-        self.valores[idx]
+    pub fn get_value(&self, idx: usize) -> f64 {
+        self.values[idx]
     }
 
-    /// Actualiza el valor de una variable de manera directa.
+    /// Updates the value of a variable directly.
     #[inline(always)]
-    pub fn actualizar_valor(&mut self, idx: usize, nuevo_valor: f64) {
-        self.valores[idx] = nuevo_valor;
+    pub fn update_value(&mut self, idx: usize, new_value: f64) {
+        self.values[idx] = new_value;
     }
 
-    /// Comprueba si la variable en un índice es rígida.
+    /// Checks if the variable at a given index is fixed (rigid).
     #[inline(always)]
-    pub fn es_fija(&self, idx: usize) -> bool {
-        self.elasticidades[idx] <= f64::EPSILON
+    pub fn is_fixed(&self, idx: usize) -> bool {
+        self.elasticities[idx] <= f64::EPSILON
     }
 
-    /// Devuelve el mapa de nombres a valores actuales (útil para recolectar resultados).
-    pub fn mapear_valores(&self) -> HashMap<String, f64> {
-        let mut mapa = HashMap::new();
-        for (idx, nombre) in self.nombres.iter().enumerate() {
-            mapa.insert(nombre.clone(), self.valores[idx]);
+    /// Returns a map of names to current values (useful to gather results).
+    pub fn map_values(&self) -> HashMap<String, f64> {
+        let mut map = HashMap::new();
+        for (idx, name) in self.names.iter().enumerate() {
+            map.insert(name.clone(), self.values[idx]);
         }
-        mapa
+        map
     }
 }

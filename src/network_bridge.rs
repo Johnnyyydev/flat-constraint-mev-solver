@@ -1,19 +1,19 @@
-use crate::espejo::{MotorSpeculam, SolucionEspejo};
-use crate::grafo::SistemaRestricciones;
+use crate::espejo::{SpeculamEngine, SpeculamSolution};
+use crate::grafo::ConstraintSystem;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 
-/// Puente de red asíncrono que conecta el resolvedor elástico con flujos continuos de telemetría y red.
+/// Async network bridge connecting the elastic solver with real-time telemetry streams.
 pub struct NetworkBridge;
 
 impl NetworkBridge {
-    /// Inicia una tarea asíncrona que simula un feed continuo de telemetría de red DePIN.
-    /// Emite fluctuaciones de red cada cierto intervalo de milisegundos.
-    pub fn iniciar_stream_simulado(intervalo_ms: u64) -> mpsc::Receiver<(String, f64)> {
+    /// Starts an async task simulating a continuous feed of DePIN network telemetry.
+    /// Emits network fluctuations at the specified interval.
+    pub fn start_simulated_stream(interval_ms: u64) -> mpsc::Receiver<(String, f64)> {
         let (tx, rx) = mpsc::channel(100);
 
         tokio::spawn(async move {
-            let eventos = [
+            let events = [
                 ("Nodo_Origen".to_string(), 8.0),
                 ("Fuga_Red".to_string(), 2.0),
                 ("Nodo_Origen".to_string(), 4.0),
@@ -24,11 +24,11 @@ impl NetworkBridge {
 
             let mut idx = 0;
             loop {
-                tokio::time::sleep(Duration::from_millis(intervalo_ms)).await;
+                tokio::time::sleep(Duration::from_millis(interval_ms)).await;
 
-                let (var_name, val) = &eventos[idx % eventos.len()];
+                let (var_name, val) = &events[idx % events.len()];
                 if tx.send((var_name.clone(), *val)).await.is_err() {
-                    break; // El receptor se cerró, finalizamos la simulación
+                    break; // Receiver closed, end simulation
                 }
 
                 idx += 1;
@@ -38,90 +38,87 @@ impl NetworkBridge {
         rx
     }
 
-    /// Escucha el flujo asíncrono, actualiza en caliente los valores en la memoria plana del sistema
-    /// y ejecuta re-evaluaciones de estrés ultra-rápidas en milisegundos.
-    pub async fn procesar_flujo(
-        mut rx: mpsc::Receiver<(String, f64)>,
-        mut sistema: SistemaRestricciones,
-    ) {
-        let motor = MotorSpeculam::new();
+    /// Listens to the async stream, updates values in the flat system layout in-place,
+    /// and triggers ultra-fast sub-millisecond elastic stress re-evaluations.
+    pub async fn process_flow(mut rx: mpsc::Receiver<(String, f64)>, mut system: ConstraintSystem) {
+        let engine = SpeculamEngine::new();
         let cyan = "\x1b[36m";
         let green = "\x1b[32m";
         let yellow = "\x1b[33m";
         let reset = "\x1b[0m";
 
         println!(
-            "  [BRIDGE] Escuchando telemetría asíncrona... listo para disipar estrés en vivo.\n"
+            "  [BRIDGE] Listening to async telemetry... ready to dissipate stress in real-time.\n"
         );
 
-        while let Some((nombre_var, nuevo_valor)) = rx.recv().await {
+        while let Some((var_name, new_value)) = rx.recv().await {
             println!(
                 "{}----------------------------------------------------------{}",
                 cyan, reset
             );
             println!(
-                "  [TELEMETRÍA EN VIVO] Ingesta de red: {}{} = {:.2}{}",
-                yellow, nombre_var, nuevo_valor, reset
+                "  [LIVE TELEMETRY] Ingested: {}{} = {:.2}{}",
+                yellow, var_name, new_value, reset
             );
 
-            // 1. Buscar la variable en caliente por O(1) e inyectar el nuevo valor en la memoria plana
-            if let Some(&var_idx) = sistema.variable_indices.get(&nombre_var) {
-                let valor_anterior = sistema.valores[var_idx];
-                sistema.valores[var_idx] = nuevo_valor;
+            // 1. O(1) hot path update directly in flat contiguous memory
+            if let Some(&var_idx) = system.variable_indices.get(&var_name) {
+                let previous_value = system.values[var_idx];
+                system.values[var_idx] = new_value;
 
                 println!(
-                    "  [MEMORIA PLANA] Variable '{}' actualizada en caliente: {:.2} -> {:.2}",
-                    nombre_var, valor_anterior, nuevo_valor
+                    "  [FLAT MEMORY] Hot-updated '{}': {:.2} -> {:.2}",
+                    var_name, previous_value, new_value
                 );
 
-                // 2. Ejecutar re-evaluación elástica paralela de manera inmediata
-                let t_solve_inicio = Instant::now();
-                let solucion = motor.evaluar(&sistema);
-                let t_solve_elapsed = t_solve_inicio.elapsed();
+                // 2. Perform parallel sub-millisecond stress re-evaluation
+                let t_solve_start = Instant::now();
+                let solution = engine.evaluate(&system);
+                let t_solve_elapsed = t_solve_start.elapsed();
 
                 println!(
-                    "  [SPECULAM SOLVER] Re-equilibrio completado en: {}{:.2?}{}",
+                    "  [SPECULAM SOLVER] Stress re-equilibration completed in: {}{:.2?}{}",
                     green, t_solve_elapsed, reset
                 );
 
-                // 3. Mostrar la disipación del estrés y valores resultantes
-                match solucion {
-                    SolucionEspejo::Pista {
-                        valores_ajustados,
-                        desviaciones,
+                // 3. Print stress dissipation results
+                match solution {
+                    SpeculamSolution::Hint {
+                        adjusted_values,
+                        deviations,
                         ..
                     } => {
-                        if !desviaciones.is_empty() {
-                            println!("  [DEFORMACIONES]");
-                            for (var, delta) in &desviaciones {
+                        if !deviations.is_empty() {
+                            println!("  [DEFORMATIONS]");
+                            for (var, delta) in &deviations {
                                 println!(
-                                    "    - '{}' se ajustó por [{:+.4}] -> valor final: {:.4}",
+                                    "    - '{}' adjusted by [{:+.4}] -> final: {:.4}",
                                     var,
                                     delta,
-                                    valores_ajustados.get(var).unwrap()
+                                    adjusted_values.get(var).unwrap()
                                 );
                             }
                         } else {
                             println!(
-                                "  [ESTADO] El cambio fue absorbido completamente por el sistema sin deformación residual."
+                                "  [STATE] Change fully absorbed by the system without residual deformation."
                             );
                         }
                     }
-                    SolucionEspejo::Directa { valores } => {
-                        println!("  [ESTADO] Equilibrio perfecto directo. Valores:");
-                        for (var, val) in &valores {
+                    SpeculamSolution::Direct { values } => {
+                        println!("  [STATE] Perfect direct equilibrium. Values:");
+                        for (var, val) in &values {
                             println!("    - '{}' = {:.4}", var, val);
                         }
                     }
-                    SolucionEspejo::ComplejidadAlta { estres, mensaje } => {
-                        println!("  [ADVERTENCIA] Caos detectado: {}", mensaje);
-                        println!("    Tensión final del sistema: {:.4}", estres.energia_total);
+                    SpeculamSolution::HighComplexity { stress, message } => {
+                        println!("  [WARNING] High complexity detected: {}", message);
+                        println!("    Final system stress: {:.4}", stress.total_energy);
                     }
                 }
             } else {
                 println!(
-                    "  [ADVERTENCIA] Telemetría omitida: '{}' no pertenece al grafo lógico actual.",
-                    nombre_var
+                    "  [WARNING] Telemetry ignored: '{}' does not belong to the active logical graph.",
+                    var_name
                 );
             }
             println!(

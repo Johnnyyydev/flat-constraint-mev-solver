@@ -1,145 +1,142 @@
-use crate::estres::CampoEstres;
-use crate::grafo::SistemaRestricciones;
+use crate::estres::StressField;
+use crate::grafo::ConstraintSystem;
 use std::collections::HashMap;
 
-/// Estructura encargada de realizar la optimización híbrida continuo-discreta
-/// y colapsar variables a coordenadas enteras mediante recocido topológico.
+/// Structure responsible for continuous-discrete hybrid optimization
+/// and collapsing variables to integer coordinates via topological annealing.
 pub struct QuantumJumper {
-    /// Tasa de aprendizaje/paso de optimización para el descenso de gradiente.
+    /// Learning rate step for gradient descent.
     pub learning_rate: f64,
-    /// Número máximo de iteraciones permitidas por ciclo de recocido.
-    pub max_pasos: usize,
-    /// Tolerancia de energía residual aceptada para considerar una solución discreta exitosa.
-    pub tolerancia: f64,
-    /// Fuerza máxima del potencial periódico de cristalización (K_int).
-    pub fuerza_cristalizacion: f64,
+    /// Maximum iterations allowed per annealing cycle.
+    pub max_steps: usize,
+    /// Residual energy tolerance below which a discrete solution is accepted.
+    pub tolerance: f64,
+    /// Maximum strength of the periodic crystallization potential (K_int).
+    pub crystallization_strength: f64,
 }
 
 impl Default for QuantumJumper {
     fn default() -> Self {
         QuantumJumper {
             learning_rate: 0.01,
-            max_pasos: 1000,
-            tolerancia: 1e-6,
-            fuerza_cristalizacion: 8.0,
+            max_steps: 1000,
+            tolerance: 1e-6,
+            crystallization_strength: 8.0,
         }
     }
 }
 
 impl QuantumJumper {
-    /// Crea una nueva instancia de `QuantumJumper` con la configuración por defecto.
+    /// Creates a new instance of `QuantumJumper` with default parameters.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Intenta encontrar una combinación de valores enteros para las variables discretas dadas
-    /// que minimice o anule por completo la tensión del sistema.
+    /// Tries to find a combination of integer values for the given discrete variables
+    /// that minimizes or completely eliminates system stress.
     ///
-    /// Este método utiliza una técnica inspirada en la física cuántica, inyectando un potencial
-    /// periódico sinusoidal que obliga a las variables especificadas a cristalizar en valores enteros
-    /// a medida que avanza el descenso de gradiente térmico.
-    pub fn saltar_espacio_discreto(
+    /// This method uses a physics-inspired approach, injecting a periodic
+    /// sinusoidal potential that forces the specified variables to crystallize into integer values
+    /// as the thermal gradient descent progresses.
+    pub fn jump_discrete_space(
         &self,
-        sistema: &SistemaRestricciones,
-        var_discretas: &[usize],
+        system: &ConstraintSystem,
+        discrete_vars: &[usize],
     ) -> Option<HashMap<String, f64>> {
-        let mut sistema_trabajo = sistema.clone();
+        let mut working_system = system.clone();
 
-        // Generador congruencial lineal (LCG) ultra simple y rápido para evitar dependencias de crates de azar
+        // Ultra fast Linear Congruential Generator (LCG) to avoid external dependency on rand crates
         let mut lcg_seed = 987654321u32;
         let mut next_random = || {
             lcg_seed = lcg_seed.wrapping_mul(1664525).wrapping_add(1013904223);
             (lcg_seed as f64) / (u32::MAX as f64)
         };
 
-        let mut mejor_energia_discreta = f64::MAX;
-        let mut mejor_configuracion_discreta: Option<Vec<f64>> = None;
+        let mut best_discrete_energy = f64::MAX;
+        let mut best_discrete_config: Option<Vec<f64>> = None;
 
-        // Intentamos múltiples ciclos de recocido/cristalización con impulsos térmicos (Quantum Kicks)
-        for ciclo in 0..5 {
-            if ciclo > 0 {
-                // Aplicar un "Quantum Kick" (impulso térmico) para saltar a otra zona del espacio topológico
-                for idx in 0..sistema_trabajo.valores.len() {
-                    if !sistema_trabajo.es_fija(idx) {
-                        // Flctuación proporcional a la distancia del ciclo
-                        let kick = (next_random() - 0.5) * 5.0 / (ciclo as f64);
-                        sistema_trabajo.valores[idx] += kick;
+        // Try multiple cycles of annealing/crystallization with thermal impulses (Quantum Kicks)
+        for cycle in 0..5 {
+            if cycle > 0 {
+                // Apply a "Quantum Kick" (thermal impulse) to jump to another region of the topological space
+                for idx in 0..working_system.values.len() {
+                    if !working_system.is_fixed(idx) {
+                        // Fluctuation proportional to current cycle distance
+                        let kick = (next_random() - 0.5) * 5.0 / (cycle as f64);
+                        working_system.values[idx] += kick;
                     }
                 }
             }
 
-            for paso in 0..self.max_pasos {
-                let mut estres_actual = CampoEstres::calcular(&sistema_trabajo);
+            for step in 0..self.max_steps {
+                let mut current_stress = StressField::calculate(&working_system);
 
-                // Rampas exponenciales de fuerza de cristalización (K_int)
-                let progreso = paso as f64 / self.max_pasos as f64;
-                let k_int = self.fuerza_cristalizacion * progreso.powi(2);
+                // Exponential crystallization strength ramp (K_int)
+                let progress = step as f64 / self.max_steps as f64;
+                let k_int = self.crystallization_strength * progress.powi(2);
 
-                // Inyectar el gradiente periódico E_int = K * sin^2(pi * x)
+                // Inject periodic crystallization gradient E_int = K * sin^2(pi * x)
                 // dE_int/dx = K * pi * sin(2 * pi * x)
-                for &idx in var_discretas {
-                    let val = sistema_trabajo.valores[idx];
+                for &idx in discrete_vars {
+                    let val = working_system.values[idx];
                     let grad_int =
                         k_int * std::f64::consts::PI * (2.0 * std::f64::consts::PI * val).sin();
-                    estres_actual.gradiente[idx] += grad_int;
+                    current_stress.gradient[idx] += grad_int;
                 }
 
-                // Damping/Recorte de gradiente
-                let mut norma_gradiente = 0.0;
-                for &g in &estres_actual.gradiente {
-                    norma_gradiente += g * g;
+                // Gradient Damping/Clipping
+                let mut gradient_norm = 0.0;
+                for &g in &current_stress.gradient {
+                    gradient_norm += g * g;
                 }
-                let norma_gradiente = norma_gradiente.sqrt();
+                let gradient_norm = gradient_norm.sqrt();
 
-                let factor_clipping = if norma_gradiente > 15.0 {
-                    15.0 / norma_gradiente
+                let clipping_factor = if gradient_norm > 15.0 {
+                    15.0 / gradient_norm
                 } else {
                     1.0
                 };
 
-                // Actualizar variables maleables
-                let len = sistema_trabajo.valores.len();
+                // Update elastic variables
+                let len = working_system.values.len();
                 for idx in 0..len {
-                    if !sistema_trabajo.es_fija(idx) {
-                        let grad_val = estres_actual.gradiente[idx] * factor_clipping;
+                    if !working_system.is_fixed(idx) {
+                        let grad_val = current_stress.gradient[idx] * clipping_factor;
                         let delta =
-                            -self.learning_rate * sistema_trabajo.elasticidades[idx] * grad_val;
-                        sistema_trabajo.valores[idx] += delta;
+                            -self.learning_rate * working_system.elasticities[idx] * grad_val;
+                        working_system.values[idx] += delta;
                     }
                 }
 
-                // Cada 20 pasos, realizamos un "salto discreto experimental" (colapso de onda)
-                // redondeando las variables a enteros y verificando si disipan el estrés elástico.
-                if paso % 20 == 0 || paso == self.max_pasos - 1 {
-                    let mut sistema_colapsado = sistema_trabajo.clone();
-                    for &idx in var_discretas {
-                        sistema_colapsado.valores[idx] = sistema_trabajo.valores[idx].round();
+                // Every 20 steps, perform an experimental discrete round-off (wavefunction collapse)
+                if step % 20 == 0 || step == self.max_steps - 1 {
+                    let mut collapsed_system = working_system.clone();
+                    for &idx in discrete_vars {
+                        collapsed_system.values[idx] = working_system.values[idx].round();
                     }
 
-                    let estres_colapsado = CampoEstres::calcular(&sistema_colapsado);
+                    let collapsed_stress = StressField::calculate(&collapsed_system);
 
-                    // Si el colapso disipa la tensión por debajo de la tolerancia, lo hemos encontrado
-                    if estres_colapsado.energia_total < self.tolerancia {
-                        return Some(sistema_colapsado.mapear_valores());
+                    // If collapse dissipates stress below tolerance, we have found it
+                    if collapsed_stress.total_energy < self.tolerance {
+                        return Some(collapsed_system.map_values());
                     }
 
-                    // Registrar el mejor colapso discreto si la energía es menor
-                    if estres_colapsado.energia_total < mejor_energia_discreta {
-                        mejor_energia_discreta = estres_colapsado.energia_total;
-                        mejor_configuracion_discreta = Some(sistema_colapsado.valores.clone());
+                    // Record the best discrete collapse if energy is lower
+                    if collapsed_stress.total_energy < best_discrete_energy {
+                        best_discrete_energy = collapsed_stress.total_energy;
+                        best_discrete_config = Some(collapsed_system.values.clone());
                     }
                 }
             }
         }
 
-        // Si no encontramos un colapso perfecto (energía < tolerancia), retornamos el mejor
-        // que hayamos obtenido en el proceso, siempre que la energía no sea astronómica.
-        if let Some(valores_finales) =
-            mejor_configuracion_discreta.filter(|_| mejor_energia_discreta < 1.0)
-        {
-            let mut sistema_final = sistema_trabajo.clone();
-            sistema_final.valores = valores_finales;
-            return Some(sistema_final.mapear_valores());
+        // If no perfect collapse found (energy < tolerance), return the best config
+        // obtained, as long as it has reasonable energy.
+        if let Some(final_values) = best_discrete_config.filter(|_| best_discrete_energy < 1.0) {
+            let mut final_system = working_system.clone();
+            final_system.values = final_values;
+            return Some(final_system.map_values());
         }
 
         None
